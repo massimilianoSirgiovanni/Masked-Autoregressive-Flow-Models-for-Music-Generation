@@ -1,33 +1,26 @@
-import mido
 from manageMIDI import *
-from manageFiles import *
 from sys import exit
+from models import *
 
-import numpy as np
+dataset = loadDataset("./variables")
+dictionary = {}
+for i in dataset:
+    for instrument in i.instruments:
+        piano_roll = midi_to_piano_roll(dataset[0], instruments=[instrument.program])
+        dictionary = piano_roll_to_dictionary(dictionary, piano_roll, instrument.program)
+print("Piano Roll obtained!")
+midi_data = piano_roll_to_midi(dictionary)
 
-import music21
+print(f"Instruments {midi_data.instruments}")
 
-# Lettura il file MIDI
-midi_file = mido.MidiFile('./Dataset MIDI/Full Metal Alchemist_ Brotherhood - Lurking.mid')
+saveMIDI(midi_data, "./output/new_midi.mid")
 
-
-#print(midi_file)
-
-tensor_midi = loadVariableFromFile("./variables/midi_tensor")
-print(tensor_midi[1:5, :])
-print("Tensore")
-print(tensor_midi.shape)
-
-# Variabili per la rappresentazione dei dati MIDI
-max_time_steps = 10#0  # Numero massimo di passi temporali
-num_pitches = 128      # Numero di possibili altezze musicali
+exit(0)
 
 if os.path.isfile("./variables/dataset"):
     dataset = loadVariableFromFile("./variables/dataset")
 else:
-    dataset = loadDataset("./Dataset MIDI", max_time_steps, num_pitches)
+    dataset = loadLMD("./lmd_matched", starting_point="A", ending_point="B")
     saveVariableInFile("./variables/dataset", dataset)
-
 print(dataset.shape)
-
 exit(0)
