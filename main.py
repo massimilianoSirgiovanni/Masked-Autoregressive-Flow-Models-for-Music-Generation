@@ -10,8 +10,8 @@ from flowBasedModels import *
 extendDataset = 0
 torch.manual_seed(seeds[0])
 torch.autograd.detect_anomaly(True)
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cpu')
 print(f"Device: {device}")
 print(f"program {choosedInstrument}")
 
@@ -19,7 +19,7 @@ print("--------------------Starting Execution---------------------")
 print(f"{Fore.YELLOW}Seed = {seeds[0]}{Style.RESET_ALL}\n")
 
 print(f"Choose Model:\n{Fore.LIGHTGREEN_EX}1. RNN;\n2. LSTM;\n3. MAF;{Style.RESET_ALL}\n")
-value = input("Enter your choice here: ")
+value = '3'#input("Enter your choice here: ")
 if value not in ["1", "2", "3"]:
     print(f"{Fore.RED}ERROR: The entered value does not match any selectable options{Style.RESET_ALL}")
     exit(-1)
@@ -39,7 +39,7 @@ choosedModel.to(device)
 
 tr_set=None;val_set=None;test_set = None;dataset = None
 print(f"Enter the corresponding number to choose what you want to execute:\n{Fore.LIGHTGREEN_EX}1. Download and preprocessing on data\n2. Model Selection\n3. Train the choosen model\n4. Testing the choosen model\n5. Complete Execution{Style.RESET_ALL}")
-value = input("Enter your choice here: ")
+value = '1'#input("Enter your choice here: ")
 
 if value not in ["1", "2", "3", "4", "5"]:
     print(f"{Fore.RED}ERROR: The entered value does not match any selectable options{Style.RESET_ALL}")
@@ -55,7 +55,7 @@ elif value == "1":
     tr_set.to(device);val_set.to(device);te_set.to(device)
     print(f"Training Set Size: {tr_set.shape}")
     print(f"Validation Set Size: {val_set.shape}")
-    forward = input(f"{Fore.MAGENTA}Do you want to continue running the Model Selection? (y/n) {Style.RESET_ALL}")
+    forward = 'n'#input(f"{Fore.MAGENTA}Do you want to continue running the Model Selection? (y/n) {Style.RESET_ALL}")
     if forward.lower() == "y":
         value = "2"
     else:
@@ -96,7 +96,7 @@ else:
     choosedModel.parametersInitialization(tr_set.shape[2], tr_set.shape[1], n_layers=1, hidden_sizes=[500], device=device)
     print(choosedModel)
     trainObj = trainingModel(choosedModel)
-#trainObj.trainModel(tr_set, val_set, te_set, batch_size=500, loss_function=loss_function, num_epochs=50, patience=10, learning_rate=0.5, file_path="./savedObjects/models/MAF_model")
+trainObj.trainModel(tr_set, val_set, te_set, batch_size=500, loss_function=loss_function, num_epochs=50, patience=5, learning_rate=0.5, file_path="./savedObjects/models/MAF_model")
 
 trainObj.plot_loss()
 displaySong(trainObj, te_set, 0)

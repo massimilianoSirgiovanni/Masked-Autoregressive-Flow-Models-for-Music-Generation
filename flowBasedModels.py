@@ -5,29 +5,21 @@ import torch
 import torch.nn as nn
 from typing import List
 
-class MaskedLinear(nn.Module):
+class MaskedLinear(nn.Linear):
     def __init__(self, input_size: int, seq_len: int, output_size: int, device, bias: bool = True, ) -> None:
-        #super().__init__(input_size*seq_len, output_size, bias)
-        super(MaskedLinear, self).__init__()
+        super().__init__(input_size*seq_len, output_size, bias)
         self.input_size = input_size
         self.output_size = output_size
-        self.relu = nn.ReLU()
         self.mask = self.createMask(seq_len)
-        self.net = nn.LSTM(input_size=input_size*seq_len, hidden_size=output_size, num_layers=1,
-                                    batch_first=True, bidirectional=False)
-        self.hidden = nn.Linear(input_size, output_size)
         self.device = device
 
-    def forward(self, x, hidden_0):
+    def forward(self, x):
         """Apply masked linear transformation."""
-        h_0 = self.hidden(hidden_0)
-        #print(h_0.shape)
         vectMask = self.mask.unsqueeze(2).unsqueeze(0)
         maskedX = vectMask * x.unsqueeze(1)
         newX = maskedX.reshape(x.shape[0], x.shape[1], x.shape[1]*x.shape[2])
-        #output = torch.nn.functional.linear(newX, self.weight, self.bias)
-        output, hidden = self.net(newX, (h_0, h_0))
-        return self.relu(output), h_0
+        output = torch.nn.functional.linear(newX, self.weight, self.bias)
+        return output
 
     def createMask(self, seq_len):
         mask = torch.zeros(seq_len, seq_len)
@@ -44,18 +36,17 @@ class MADE(nn.Module):
         self.layers = nn.ModuleList()
         dim_list = [input_size, *hidden_sizes, input_size*2]
         self.device = device
-        self.initialHidden = nn.Parameter(torch.randn(1, input_size))
         for i in range(len(dim_list) - 2):
             self.layers.append(MaskedLinear(dim_list[i], seq_len, dim_list[i + 1], device=device))
+            self.layers.append(nn.ReLU())
 
         self.layers.append(MaskedLinear(dim_list[-2], seq_len, dim_list[-1], device=device))
 
     def forward(self, x):
         output = x
-        hidden = self.initialHidden.repeat(1, x.shape[0], 1)
         #print(f"Intial Hidden: {hidden}")
         for layer in self.layers:
-            output, hidden = layer(output, hidden)
+            output = layer(output)
         return torch.sigmoid(output)
     
 class MAFLayer(nn.Module):
@@ -67,8 +58,8 @@ class MAFLayer(nn.Module):
     def forward(self, x):
         out = self.made(x)
         mu, log_p = torch.chunk(out, 2, dim=2)
-        #mu.to(self.device); log_p.to(self.device)
-        u = (x - mu) * torch.exp(0.5 * log_p)  # residuo/deviazione standard
+        mu.to(self.device); log_p.to(self.device)
+        u = (x - mu) * torch.exp(-log_p)  # residuo/deviazione standard
 
         return u, - torch.sum(log_p, dim=(1, 2))
 

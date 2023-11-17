@@ -14,9 +14,6 @@ if not exists(f"{current_directory}/savedObjects"):
 if not exists(f"{current_directory}/savedObjects/datasets"):
     makedirs(f"{current_directory}/savedObjects/datasets")
 
-if not exists(f"{current_directory}/savedObjects/datasets/lmd"):
-    makedirs(f"{current_directory}/savedObjects/datasets/lmd")
-
 if not exists(f"{current_directory}/savedObjects/models"):
     makedirs(f"{current_directory}/savedObjects/models")
 
