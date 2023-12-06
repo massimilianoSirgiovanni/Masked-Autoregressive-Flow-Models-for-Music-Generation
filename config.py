@@ -23,7 +23,7 @@ if not exists(f"{current_directory}/savedObjects/models/RNN"):
 if not exists(f"{current_directory}/savedObjects/models/LSTM"):
     makedirs(f"{current_directory}/savedObjects/models/LSTM")
 
-seeds = [121]
+seeds = [0]
 
 for i in seeds:
     if not exists(f"{current_directory}/savedObjects/models/RNN/Seed={i}"):

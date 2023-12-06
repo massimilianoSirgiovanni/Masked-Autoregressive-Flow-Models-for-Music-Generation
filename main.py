@@ -2,10 +2,10 @@ import torch
 
 from manageMIDI import *
 from sys import exit
-from models import *
+from vaeModel import *
 from train import *
 from modelSelection import *
-from flowBasedModels import *
+from mafModel import *
 
 extendDataset = 0
 torch.manual_seed(seeds[0])
@@ -14,6 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #device = torch.device('cpu')
 print(f"Device: {device}")
 print(f"program {choosedInstrument}")
+
 
 print("--------------------Starting Execution---------------------")
 print(f"{Fore.YELLOW}Seed = {seeds[0]}{Style.RESET_ALL}\n")
@@ -35,6 +36,7 @@ elif value == "3":
     choosedModel = MAF()
     loss_function = loss_function_maf
     choosedDirectory = directory_models_MAF
+    #choosedModel = MADEMultivariate((131, 32), [(50, 16)], device)
 choosedModel.to(device)
 
 tr_set=None;val_set=None;test_set = None;dataset = None
@@ -93,18 +95,17 @@ if exists("./savedObjects/models/MAF_model"):
     trainObj = loadVariableFromFile("./savedObjects/models/MAF_model")
     print(trainObj)
 else:
-    choosedModel.parametersInitialization(tr_set.shape[2], tr_set.shape[1], n_layers=1, hidden_sizes=[500], device=device)
+    choosedModel.parametersInitialization((131, 32), hidden_sizes=[(80, 20)], n_layers=2, device=device, madeType="multivariate")
     print(choosedModel)
     trainObj = trainingModel(choosedModel)
-trainObj.trainModel(tr_set, val_set, te_set, batch_size=500, loss_function=loss_function, num_epochs=50, patience=5, learning_rate=0.5, file_path="./savedObjects/models/MAF_model")
+trainObj.trainModel(tr_set, val_set, te_set, batch_size=600, loss_function=loss_function, num_epochs=50, patience=10, learning_rate=0.5, file_path="./savedObjects/models/MAF_model")
+
+'''print("Generation")
+print(trainObj.bestModel.generate())'''
 
 trainObj.plot_loss()
-displaySong(trainObj, te_set, 0)
-displaySong(trainObj, te_set,  10)
-displaySong(trainObj, te_set, 100)
 exit(0)
 #########################################################################################
-
 saved = input("Saved")
 if saved == "1":
     trainObj = loadVariableFromFile("./savedObjects/models/bestReconModel=(32, 96, 0.01, 1000, 3, 0.1)")

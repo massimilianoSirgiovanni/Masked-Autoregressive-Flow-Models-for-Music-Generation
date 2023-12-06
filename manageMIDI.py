@@ -118,27 +118,6 @@ def databaseLoadedInstruments(directory, instruments):
             return False
     return True
 
-
-'''def loadLMD(directory, starting_point="A", ending_point="Z"):
-    dataset = None
-    if os.path.isfile(f"{current_directory}/savedObjects/datasets/dataset"):
-        return loadVariableFromFile(f"{current_directory}/savedObjects/datasets/dataset")
-    for i in range(ord(starting_point), ord(ending_point) + 1):
-        if os.path.isfile(f"{directory_dataset}/{chr(i)}"):
-            tmp = loadVariableFromFile(f"{directory_dataset}/{chr(i)}")
-        else:
-            tmp = loadDataset(f"{current_directory}/{directory}/{chr(i)}")
-            saveVariableInFile(f"{directory_dataset}/{chr(i)}", tmp)
-        if dataset == None:
-            dataset = tmp
-        else:
-            if torch.is_tensor(tmp):
-                dataset = torch.cat((dataset, tmp))
-        print(f"Letter {chr(i)} downloaded")
-    saveVariableInFile(f"{current_directory}/savedObjects/datasets/dataset", dataset)
-
-    return dataset'''
-
 def transformListMidi(listMidi, program=default_instruments):
     listTensor = []
     for midi_file in listMidi:

@@ -1,5 +1,5 @@
 import itertools
-from models import *
+from vaeModel import *
 from train import *
 import os
 

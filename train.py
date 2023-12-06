@@ -8,12 +8,13 @@ import torch.optim as optim
 import matplotlib.pyplot as pp
 from config import *
 from manageMIDI import *
+from IPython.display import display, Image
 
 class trainingModel():
     def __init__(self, model):
         self.bestModel = model
         self.trainedEpochs = 0
-        self.bestEpoch = 0
+        self.bestEpoch = -1
         self.valLossList = []
         self.trLossList = []
         self.bestValLoss = None
@@ -37,7 +38,7 @@ class trainingModel():
 
         index_Patience = patience
         isRecon = False
-        for epoch in range(self.bestEpoch, num_epochs):
+        for epoch in range(self.bestEpoch + 1, num_epochs):
             for batch_data in tqdm(self.tr_set, desc='Training: '):
                 with torch.autograd.detect_anomaly():
                     optimizer.zero_grad()
@@ -98,10 +99,10 @@ class trainingModel():
             if test == None:
                 latent_sample = torch.randn(1, self.bestModel.encoder.latent_dim)
                 prediction = self.bestModel.decode(latent_sample, seq_len)
-                binary_output = binarize_predictions(torch.sigmoid(prediction), threshold=0.2)
+                binary_output = binarize_predictions(torch.sigmoid(prediction), threshold=0.5)
             else:
                 prediction = self.bestModel(test)
-                binary_output = binarize_predictions(torch.sigmoid(prediction[0]), threshold=0.2)
+                binary_output = binarize_predictions(prediction[0], threshold=0.2)
 
         return binary_output
 
@@ -134,6 +135,11 @@ class trainingModel():
         pp.title(f"{type}Loss set through the epochs")
         pp.xlabel("Epochs")
         pp.ylabel(f"{type}Loss")
+
+        temp_image_path = "./temp_plot.png"
+        pp.savefig(temp_image_path)
+        # Visualizza l'immagine
+        display(Image(filename=temp_image_path))
         pp.draw()
         pp.show()
 
