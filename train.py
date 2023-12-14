@@ -1,5 +1,7 @@
 import random
 
+import numpy
+
 from manageFiles import *
 import torch.utils.data as data
 from tqdm import tqdm
@@ -9,6 +11,7 @@ import matplotlib.pyplot as pp
 from config import *
 from manageMIDI import *
 from IPython.display import display, Image
+
 
 class trainingModel():
     def __init__(self, model):
@@ -38,7 +41,14 @@ class trainingModel():
 
         index_Patience = patience
         isRecon = False
-        for epoch in range(self.bestEpoch + 1, num_epochs):
+        self.trainedEpochs = self.bestEpoch + 1
+        for epoch in range(self.trainedEpochs, num_epochs):
+            if len(self.trLossList) > self.trainedEpochs:
+                self.trLossList = self.trLossList[0:self.trainedEpochs]
+                self.valLossList = self.valLossList[0:self.trainedEpochs]
+                self.valReconList = self.valReconList[0:self.trainedEpochs]
+                self.trReconList = self.trReconList[0:self.trainedEpochs]
+            tr_loss_epoch = []
             for batch_data in tqdm(self.tr_set, desc='Training: '):
                 with torch.autograd.detect_anomaly():
                     optimizer.zero_grad()
@@ -46,29 +56,35 @@ class trainingModel():
                     tr_loss = loss_function(output, batch_data, beta=beta)
                     if type(tr_loss) is tuple:
                         isRecon = True
-                        tr_loss, tr_recon = tr_loss
+                        tr_recon, tr_loss = tr_loss
                     tr_loss.backward()
                     max_grad_norm = 1.0
                     torch.nn.utils.clip_grad_norm_(parameter_funct(model), max_grad_norm)
                     optimizer.step()
-
+                    tr_loss_epoch.append(tr_loss.item())
 
             # Validation
             model.eval()
             with torch.no_grad():
+                val_loss_epoch = []
                 for batch_data in tqdm(self.val_set, desc='Validation: '):
+
                     output_val = model(batch_data)
                     val_loss = loss_function(output_val, batch_data, beta=beta)
                     if isRecon:
-                        val_loss, val_recon = val_loss
+                        val_recon, val_loss = val_loss
+                    val_loss_epoch.append(val_loss.item())
+
             self.trainedEpochs = epoch + 1
-            self.trLossList.append(tr_loss.item())
-            self.valLossList.append(val_loss.item())
+            tr_loss_mean = numpy.array(tr_loss_epoch).mean()
+            val_loss_mean = numpy.array(val_loss_epoch).mean()
+            self.trLossList.append(tr_loss_mean)
+            self.valLossList.append(val_loss_mean)
             if isRecon:
                 self.trReconList.append(tr_recon.item())
                 self.valReconList.append(val_recon.item())
-            if self.bestValLoss == None or self.bestValLoss >= val_loss:
-                self.bestValLoss = val_loss
+            if self.bestValLoss == None or self.bestValLoss >= val_loss_mean:
+                self.bestValLoss = val_loss_mean
                 self.bestEpoch = epoch
                 self.bestModel = model
                 index_Patience = patience
@@ -82,18 +98,24 @@ class trainingModel():
                     break
                 print(f"EARLY STOPPING: Patience Epochs remained {index_Patience}")
 
-            out_string = f'Epoch [{epoch + 1}/{num_epochs}], Tr Loss: {tr_loss.item():.4f}, '
+            out_string = f'Epoch [{epoch + 1}/{num_epochs}], Tr Loss: {tr_loss_mean.item():.4f}, '
             if isRecon:
-                out_string = out_string + f'Tr Recon: {tr_recon.item():.4f}, Val Loss: {val_loss.item():.4f}, Val Recon: {val_recon.item():.4f}'
+                out_string = out_string + f'Tr Recon: {tr_recon.item():.4f}, Val Loss: {val_loss_mean.item():.4f}, Val Recon: {val_recon.item():.4f}'
             else:
-                out_string = out_string + f'Val Loss: {val_loss.item():.4f}'
+                out_string = out_string + f'Val Loss: {val_loss_mean.item():.4f}'
 
             print(out_string)
-
+        self.bestModel.chooseBestThreshold(tr_set, batch_size=300)
         if saveModel == True:
             saveVariableInFile(file_path, self)
 
-    def predict(self, test=None, seq_len=32):
+    def generate(self, n_samples=1, u=None):
+        torch.seed()
+        x = self.bestModel.generate(n_samples=n_samples, u=u)
+        torch.manual_seed(seeds[0])
+        return x
+
+    '''def predict(self, test=None, seq_len=32):
         self.bestModel.eval()
         with torch.no_grad():
             if test == None:
@@ -104,7 +126,7 @@ class trainingModel():
                 prediction = self.bestModel(test)
                 binary_output = binarize_predictions(prediction[0], threshold=0.2)
 
-        return binary_output
+        return binary_output'''
 
 
     def __str__(self):
@@ -131,7 +153,8 @@ class trainingModel():
             pp.plot(self.valLossList, 'r--', label="validation")
         if self.bestEpoch != None:
             ymax = max(max(self.trLossList), max(self.valLossList))
-            pp.vlines(x=self.bestEpoch, ymin=0, ymax=ymax, colors='tab:gray', linestyles='dashdot')
+            ymin = min(min(self.trLossList), min(self.valLossList))
+            pp.vlines(x=self.bestEpoch, ymin=ymin, ymax=ymax, colors='tab:gray', linestyles='dashdot')
         pp.title(f"{type}Loss set through the epochs")
         pp.xlabel("Epochs")
         pp.ylabel(f"{type}Loss")
@@ -162,26 +185,15 @@ def holdoutSplit(X, val_percentage=0.1, test_percentage=0.1):
     return X_tr, X_val, X_test
 
 
-def predictAndSaveASong(model, song):
-    dictionary = piano_roll_to_dictionary(song[0], 0)
+def generateAndSaveASong(model, song=None, file_path="./output/song", instrument=1):
+    if song != None:
+        if song.shape[0]>1:
+            print(f"{Fore.LIGHTMAGENTA_EX}This method can generate only a song for time, it will beh generated only the first one passed as an argument{Style.RESET_ALL}")
+            song = song[0:1, :, :]
+        dictionary = piano_roll_to_dictionary(song[0], instrument)
+        newMidi = piano_roll_to_midi(dictionary)
+        saveMIDI(newMidi, f"{file_path}Input.mid")
+    output = model.generate(n_samples=1, u=song)
+    dictionary = piano_roll_to_dictionary(output[0], instrument)
     newMidi = piano_roll_to_midi(dictionary)
-    for i in newMidi.instruments:
-        print(i)
-        for note in i.notes:
-            print(note)
-    saveMIDI(newMidi, "./output/preVAE.mid")
-    output = model.predict(song)
-    print(output)
-    dictionary = piano_roll_to_dictionary(output[0], 0)
-    newMidi = piano_roll_to_midi(dictionary)
-    saveMIDI(newMidi, "./output/vaeOutput.mid")
-    for i in newMidi.instruments:
-        print(i)
-        for note in i.notes:
-            print(note)
-    print(newMidi)
-
-def displaySong(model, te_set, j):
-    print(f"Song: {j}")
-    song = te_set[j:j + 1]
-    predictAndSaveASong(model, song)
+    saveMIDI(newMidi, f"{file_path}Generated.mid")

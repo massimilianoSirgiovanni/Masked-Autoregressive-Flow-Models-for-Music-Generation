@@ -4,7 +4,23 @@ import torch.nn as nn
 from maskedLinear import *
 import numpy
 
-class MADEUnivariate(nn.Module):
+
+class MADE(nn.Module):
+    def __init__(self):
+        super(MADE, self).__init__()
+
+    def generate(self, n_samples=1, u=None):
+        u = torch.randn((n_samples, self.num_notes, self.num_seq)) if u is None else u
+        x = torch.zeros((u.shape[0], self.num_notes, self.num_seq))
+        for i in range(0, self.num_seq):
+            ord_seq = torch.Tensor(self.m[-1])
+            idx_seq = torch.argwhere(ord_seq == i)[0, 0]
+            out = self.forward(x)
+            mu, logp = torch.chunk(out, 2, dim=2)
+            x[:, :, idx_seq] = mu[:, :, idx_seq] + torch.exp(-0.5 * logp[:, :, idx_seq]) * u[:, :, idx_seq]
+        return x
+
+class MADEUnivariate(MADE):
     def __init__(self, input_size: tuple[int], hidden_sizes: List[int], device, seed=0):
         super().__init__()
         self.num_seq = input_size[1]
@@ -40,25 +56,56 @@ class MADEUnivariate(nn.Module):
             self.m[l] = rng.randint(self.m[l - 1].min(), in_size-1, size=self.dim_list[l+1])
         masks = [self.m[l - 1][None, :] <= self.m[l][:, None] for l in range(numLayer)]
         masks.append(self.m[numLayer - 1][None, :] < self.m[-1][:, None])
-        layers = [l for l in self.layers if isinstance(l, MaskedLinearUnivariate)]
+        layers = [l for l in self.layers if isinstance(l, MaskedLinear)]
         for l, m in zip(layers, masks):
             l.set_mask(m)
 
-    def generate(self, n_samples=1, u=None):
-        print("generation...")
-        x = torch.zeros((n_samples, self.num_notes, self.num_seq))
-        u = torch.randn((n_samples, self.num_notes, self.num_seq)) if u is None else u
-        for i in range(0, self.num_seq):
-            ord_seq = torch.Tensor(self.m[-1])
-            idx_seq = torch.argwhere(ord_seq == i)[0, 0]
-            out = self.forward(x)
-            mu, logp = torch.chunk(out, 2, dim=2)
-            x[:, :, idx_seq] = mu[:, :, idx_seq] + torch.exp(-0.5 * logp[:, :, idx_seq]) * u[:, :, idx_seq]
-        return x
+class MADEDifferentMaskDifferentWeight(MADE):
+    def __init__(self, input_size: tuple[int], hidden_sizes: List[int], device, seed=0):
+        super().__init__()
+        self.num_seq = input_size[1]
+        self.num_notes = input_size[0]
+        self.hidden_sizes = hidden_sizes
+        self.layers = nn.ModuleList()
+        self.dim_list = [self.num_seq, *hidden_sizes, 2*self.num_seq]
+        self.device = device
+        for i in range(len(self.dim_list) - 2):
+            self.layers.append(MaskedLinearMultinotes(self.dim_list[i], self.num_notes, self.dim_list[i + 1], device=device))
+            self.layers.append(nn.ReLU())
+        self.m = {}
+        self.seed = seed
+        self.layers.append(MaskedLinearMultinotes(self.dim_list[-2], self.num_notes, self.dim_list[-1], device=device))
+        self.createMasks()
 
-class MADEDifferentMaskDifferentWeight(nn.Module):
+
+    def forward(self, x):
+        output = x
+        for layer in self.layers:
+            output = layer(output)
+        return torch.sigmoid(output)
+
+    def createMasks(self):
+        numLayer = len(self.dim_list) - 1  # It not consider the ReLu layers
+
+        rng = numpy.random.RandomState(self.seed)
+        self.seed = self.seed + 1
+
+        in_size = self.dim_list[0]
+        self.m[-1] = numpy.arange(in_size)
+        for l in range(numLayer):
+            self.m[l] = rng.randint(self.m[l - 1].min(), in_size-1, size=self.dim_list[l+1])
+        masks = [self.m[l - 1][None, :] <= self.m[l][:, None] for l in range(numLayer)]
+        masks.append(self.m[numLayer - 1][None, :] < self.m[-1][:, None])
+        layers = [l for l in self.layers if isinstance(l, MaskedLinear)]
+        for l, m in zip(layers, masks):
+            l.set_mask(m)
+'''
+
+
+class MADEDifferentMaskDifferentWeight(MADE):
     def __init__(self, input_size: tuple[int], hidden_sizes: List[int], device):
         super().__init__()
+        print("Old Model")
         self.num_seq = input_size[1]
         self.num_notes = input_size[0]
         self.MADE = {}
@@ -69,11 +116,11 @@ class MADEDifferentMaskDifferentWeight(nn.Module):
 
     def forward(self, x):
         u = torch.zeros((x.shape[0], x.shape[1], x.shape[2]*2))
-        for i in range(0, self.num_notes):
+        for i in range(1, self.num_notes):
             u[:, i:i+1, :] = self.MADE[i](x[:, i:i + 1, :])
         return u
 
-    def generate(self, n_samples=1, u=None):
+def generate(self, n_samples=1, u=None):
         x = torch.zeros((n_samples, self.num_notes, self.num_seq))
         u = torch.randn((n_samples, self.num_notes, self.num_seq)) if u is None else u
         for i in range(0, self.num_notes):
@@ -82,9 +129,9 @@ class MADEDifferentMaskDifferentWeight(nn.Module):
             x[:, i, :] = self.MADE[i].generate(n_samples)
         return x
 
+'''
 
-
-class MADEMultivariate(nn.Module):
+class MADEMultivariate(MADE):
     def __init__(self, input_size: tuple[int], hidden_sizes: List[tuple[int]], device, seed=0):
         super(MADEMultivariate, self).__init__()
         self.num_seq = input_size[1]
@@ -132,7 +179,7 @@ class MADEMultivariate(nn.Module):
         for l, m in zip(layers, masks):
             l.set_mask(m)
 
-    def generate(self, n_samples=1, u=None):
+    '''def generate(self, n_samples=1, u=None):
         x = torch.zeros((n_samples, self.num_features, self.num_seq))
         u = torch.randn((n_samples, self.num_features, self.num_seq)) if u is None else u
         for i in range(0, self.num_seq):
@@ -144,4 +191,4 @@ class MADEMultivariate(nn.Module):
                 ord_feat = torch.Tensor(self.m_features[-1])
                 idx_feat = torch.argwhere(ord_feat == j)[0, 0]
                 x[:, idx_feat, idx_seq] = mu[:, idx_feat, idx_seq] + torch.exp(-0.5 * logp[:, idx_feat, idx_seq]) * u[:, idx_feat, idx_seq]
-        return x
+        return x'''

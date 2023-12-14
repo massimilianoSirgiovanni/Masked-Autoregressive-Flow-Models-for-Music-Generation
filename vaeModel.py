@@ -149,11 +149,3 @@ def loss_function_VAE(output, x, beta=0.1):
     return BCE, total_loss
 
 
-
-def loss_function_hidden(output, x, beta=0):
-    recon_x, mu, logvar, h_enc, h_dec = output
-    hidden_loss = nn.functional.cross_entropy(h_dec[0], h_enc[0])
-    cell_loss = nn.functional.cross_entropy(h_dec[1], h_enc[1])
-    return torch.zeros(1, 1),  hidden_loss + cell_loss
-
-

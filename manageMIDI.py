@@ -72,7 +72,6 @@ def midi_to_piano_roll(midi_data, ticks_per_beat=480, number_notes=128, num_bar=
 def loadDataset(directory, instruments=default_instruments):
     print(f"Loading Dataset from {directory} ...")
     dataset_midi = {}
-    p = 0
     for dirpath, dirnames, filenames in os.walk(directory):
         for filename in [f for f in filenames if f.endswith(".mid")]:
             #print(f"{dirpath}/{filename}")
@@ -201,6 +200,7 @@ def getSingleInstrumentDatabaseLMD(directory, instrument):
 
 def binarize_predictions(predictions, threshold=0.5):
     # Applica la soglia di attivazione
+    predictions = torch.sigmoid(predictions)
     binary_predictions = (predictions > threshold).int()
     return binary_predictions
 

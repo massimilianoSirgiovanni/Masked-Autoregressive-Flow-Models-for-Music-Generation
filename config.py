@@ -36,7 +36,7 @@ directory_models_RNN = f"{current_directory}/savedObjects/models/RNN"
 directory_models_LSTM = f"{current_directory}/savedObjects/models/LSTM"
 directory_models_MAF = f"{current_directory}/savedObjects/models/MAF"
 
-
+genres = ['pop', 'rap', 'rock', 'classical']
 
 
 latent_size_values = [16, 32, 64]
