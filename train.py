@@ -26,7 +26,7 @@ class trainingModel():
         self.valReconList = []
         self.trReconList = []
 
-    def trainModel(self, tr_set, val_set, te_set, batch_size, loss_function, parameter_funct=nn.Module.parameters, num_epochs=100, patience=5, optimizer=optim.Adam, learning_rate=1e-3, file_path='./savedObjects/model', saveModel=True, beta=0.1):
+    def trainModel(self, tr_set, val_set, batch_size, loss_function, parameter_funct=nn.Module.parameters, num_epochs=100, patience=5, optimizer=optim.Adam, learning_rate=1e-3, file_path='./savedObjects/model', saveModel=True, beta=0.1):
         if batch_size > tr_set.shape[0]:
             print(f"{Fore.LIGHTRED_EX}WARNING: The batch size is larger than the number of instances!{Style.RESET_ALL}")
 
@@ -105,7 +105,6 @@ class trainingModel():
                 out_string = out_string + f'Val Loss: {val_loss_mean.item():.4f}'
 
             print(out_string)
-        self.bestModel.chooseBestThreshold(tr_set, batch_size=300)
         if saveModel == True:
             saveVariableInFile(file_path, self)
 
@@ -114,6 +113,13 @@ class trainingModel():
         x = self.bestModel.generate(n_samples=n_samples, u=u)
         torch.manual_seed(seeds[0])
         return x
+
+    def testModel(self, test_set, set_name="input"):
+        print(f"Testing...")
+        generatedX = self.generate(u=test_set)
+        norm = torch.norm(test_set - generatedX, p=2)/test_set.shape[0]
+        print(f"Similarity measure (two-norm) between {set_name} and midi generator: {norm}")
+        return norm
 
     '''def predict(self, test=None, seq_len=32):
         self.bestModel.eval()

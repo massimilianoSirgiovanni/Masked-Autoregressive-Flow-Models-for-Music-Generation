@@ -3,9 +3,10 @@ import pretty_midi
 import os
 from manageFiles import *
 import random
-from config import directory_dataset, current_directory
+from config import directory_dataset, current_directory, choosedGenres
 from os import makedirs
 from os.path import exists
+from genreAnalysis import getArtistName, getGenreFromSpotify, selectGenre
 
 default_instruments = range(0, 128)
 
@@ -74,8 +75,19 @@ def loadDataset(directory, instruments=default_instruments):
     dataset_midi = {}
     for dirpath, dirnames, filenames in os.walk(directory):
         for filename in [f for f in filenames if f.endswith(".mid")]:
-            #print(f"{dirpath}/{filename}")
+            metadataFile = dirpath.replace("lmd_matched", "lmd_matched_h5") + '.h5'
+            print(f"Metadata: {metadataFile}")
+            print(f"{dirpath}/{filename}")
             try:
+                artistName = getArtistName(metadataFile)
+                genres = getGenreFromSpotify(artistName)
+                print(genres)
+                genre = selectGenre(genres)
+                print(genre)
+                if genre is None:
+                    print("Non appartiene ad un genere selezionato")
+                else:
+                    print("Trasformazioni MIDI")
                 midi_file = pretty_midi.PrettyMIDI(f"{dirpath}/{filename}")
                 if midiFilters(midi_file):
                     #print(f"Inserted: {filename}")

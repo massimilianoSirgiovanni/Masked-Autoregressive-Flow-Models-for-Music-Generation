@@ -9,6 +9,12 @@ class MADE(nn.Module):
     def __init__(self):
         super(MADE, self).__init__()
 
+    def forward(self, x):
+        output = x
+        for layer in self.layers:
+            output = layer(output)
+        return output
+
     def generate(self, n_samples=1, u=None):
         u = torch.randn((n_samples, self.num_notes, self.num_seq)) if u is None else u
         x = torch.zeros((u.shape[0], self.num_notes, self.num_seq))
@@ -19,6 +25,22 @@ class MADE(nn.Module):
             mu, logp = torch.chunk(out, 2, dim=2)
             x[:, :, idx_seq] = mu[:, :, idx_seq] + torch.exp(-0.5 * logp[:, :, idx_seq]) * u[:, :, idx_seq]
         return x
+
+    def createMasks(self):
+        numLayer = len(self.dim_list) - 1  # It not consider the ReLu layers
+
+        rng = numpy.random.RandomState(self.seed)
+        self.seed = self.seed + 1
+
+        in_size = self.dim_list[0]
+        self.m[-1] = numpy.arange(in_size)
+        for l in range(numLayer):
+            self.m[l] = rng.randint(self.m[l - 1].min(), in_size-1, size=self.dim_list[l+1])
+        masks = [self.m[l - 1][None, :] <= self.m[l][:, None] for l in range(numLayer)]
+        masks.append(self.m[numLayer - 1][None, :] < self.m[-1][:, None])
+        layers = [l for l in self.layers if isinstance(l, MaskedLinear)]
+        for l, m in zip(layers, masks):
+            l.set_mask(m)
 
 class MADEUnivariate(MADE):
     def __init__(self, input_size: tuple[int], hidden_sizes: List[int], device, seed=0):
@@ -38,27 +60,9 @@ class MADEUnivariate(MADE):
         self.createMasks()
 
 
-    def forward(self, x):
-        output = x
-        for layer in self.layers:
-            output = layer(output)
-        return torch.sigmoid(output)
 
-    def createMasks(self):
-        numLayer = len(self.dim_list) - 1  # It not consider the ReLu layers
 
-        rng = numpy.random.RandomState(self.seed)
-        self.seed = self.seed + 1
 
-        in_size = self.dim_list[0]
-        self.m[-1] = numpy.arange(in_size)
-        for l in range(numLayer):
-            self.m[l] = rng.randint(self.m[l - 1].min(), in_size-1, size=self.dim_list[l+1])
-        masks = [self.m[l - 1][None, :] <= self.m[l][:, None] for l in range(numLayer)]
-        masks.append(self.m[numLayer - 1][None, :] < self.m[-1][:, None])
-        layers = [l for l in self.layers if isinstance(l, MaskedLinear)]
-        for l, m in zip(layers, masks):
-            l.set_mask(m)
 
 class MADEDifferentMaskDifferentWeight(MADE):
     def __init__(self, input_size: tuple[int], hidden_sizes: List[int], device, seed=0):
@@ -77,59 +81,6 @@ class MADEDifferentMaskDifferentWeight(MADE):
         self.layers.append(MaskedLinearMultinotes(self.dim_list[-2], self.num_notes, self.dim_list[-1], device=device))
         self.createMasks()
 
-
-    def forward(self, x):
-        output = x
-        for layer in self.layers:
-            output = layer(output)
-        return torch.sigmoid(output)
-
-    def createMasks(self):
-        numLayer = len(self.dim_list) - 1  # It not consider the ReLu layers
-
-        rng = numpy.random.RandomState(self.seed)
-        self.seed = self.seed + 1
-
-        in_size = self.dim_list[0]
-        self.m[-1] = numpy.arange(in_size)
-        for l in range(numLayer):
-            self.m[l] = rng.randint(self.m[l - 1].min(), in_size-1, size=self.dim_list[l+1])
-        masks = [self.m[l - 1][None, :] <= self.m[l][:, None] for l in range(numLayer)]
-        masks.append(self.m[numLayer - 1][None, :] < self.m[-1][:, None])
-        layers = [l for l in self.layers if isinstance(l, MaskedLinear)]
-        for l, m in zip(layers, masks):
-            l.set_mask(m)
-'''
-
-
-class MADEDifferentMaskDifferentWeight(MADE):
-    def __init__(self, input_size: tuple[int], hidden_sizes: List[int], device):
-        super().__init__()
-        print("Old Model")
-        self.num_seq = input_size[1]
-        self.num_notes = input_size[0]
-        self.MADE = {}
-        self.seed = 0
-        for i in range(0, self.num_notes):
-            self.MADE[i] = MADEUnivariate(input_size, hidden_sizes, device, self.seed)
-            self.seed = (self.seed + 1)
-
-    def forward(self, x):
-        u = torch.zeros((x.shape[0], x.shape[1], x.shape[2]*2))
-        for i in range(1, self.num_notes):
-            u[:, i:i+1, :] = self.MADE[i](x[:, i:i + 1, :])
-        return u
-
-def generate(self, n_samples=1, u=None):
-        x = torch.zeros((n_samples, self.num_notes, self.num_seq))
-        u = torch.randn((n_samples, self.num_notes, self.num_seq)) if u is None else u
-        for i in range(0, self.num_notes):
-            print(self.MADE[i].generate(n_samples).shape)
-            print(x[:, i, :].shape)
-            x[:, i, :] = self.MADE[i].generate(n_samples)
-        return x
-
-'''
 
 class MADEMultivariate(MADE):
     def __init__(self, input_size: tuple[int], hidden_sizes: List[tuple[int]], device, seed=0):
@@ -153,7 +104,7 @@ class MADEMultivariate(MADE):
         output = x
         for layer in self.layers:
             output = layer(output)
-        return torch.sigmoid(output)
+        return output
 
     def createMask(self):
         numLayer = len(self.dim_list) - 1  # It not consider the ReLu layers

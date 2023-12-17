@@ -26,7 +26,7 @@ class MAFLayer(nn.Module):
         else:
             self.madeType = "univariate"
             print(f"{Fore.YELLOW}The string:{madeType} does not match any MADE type, therefore was used the default type :\"univariate\"{Style.RESET_ALL}")
-            self.made = MADEUnivariate(input_size[1], hidden_sizes, device=self.device)
+            self.made = MADEUnivariate(input_size, hidden_sizes, device=self.device)
 
     def forward(self, x):
         out = self.made(x)
@@ -69,8 +69,7 @@ class MAF(nn.Module):
             else:
                 self.batch_norm = nn.BatchNorm1d(input_size[1])
 
-            self.threshold = 0.7
-            #self.threshold = nn.Parameter(torch.tensor(0.5, dtype=torch.float32, requires_grad=True))
+            self.threshold = 0.5
         else:
             print(f"{Fore.LIGHTMAGENTA_EX}Parameters where already initialized{Style.RESET_ALL}")
 
@@ -94,6 +93,7 @@ class MAF(nn.Module):
                 x = self.batch_norm(x)'''
             x = torch.permute(x, (0, 2, 1))
             log_det_sum += log_det
+            #x = torch.sigmoid(x)
 
         return x, self.negativeLogLikelihood(x, log_det_sum)
 
@@ -102,32 +102,6 @@ class MAF(nn.Module):
         negloglik_loss = - torch.mean(negloglik_loss)
         return negloglik_loss
 
-    def chooseBestThreshold(self, tr_set, batch_size=500):
-        #torch.set_printoptions(profile="full")
-        dataset = data.DataLoader(tr_set, batch_size=batch_size, shuffle=True)
-        self.eval()
-        with torch.no_grad():
-            globalThresholds = []
-            for batch_data in tqdm(dataset, desc='Choosing Best Threshold: '):
-                x_generated = self.genNoBin(u=batch_data)
-                thresholds = numpy.arange(0.5, 1.0, 0.01)
-                bestThresholds = []
-                minValue = None
-                for threshold in thresholds:
-                    new_x = binarize_predictions(x_generated, threshold)
-                    new_x = torch.permute(new_x, (0, 2, 1))
-                    norm = torch.norm(batch_data - new_x, p=2)
-                    if minValue == None or norm < minValue:
-                        minValue = norm
-                        bestThresholds = [threshold]
-                    elif norm == minValue:
-                        bestThresholds.append(threshold)
-                print(bestThresholds)
-                globalThresholds.append(numpy.median(bestThresholds))
-        print(globalThresholds)
-        self.threshold = numpy.mean(globalThresholds)
-        print(bestThresholds)
-        #torch.set_printoptions(profile="default")
 
     def generate(self, n_samples=1, u=None):
         torch.set_printoptions(profile="full")
@@ -143,10 +117,6 @@ class MAF(nn.Module):
         with torch.no_grad():
             for layer in self.layers[::-1]:
                 x = layer.generate(n_samples, x)
-        if u is not None:
-            norm = torch.norm(torch.permute(u, (0, 2, 1)) - x, p=2)
-            print(f"Similarity measure (two-norm) between input and midi generator: {norm}")
-
         return x
 
     def __str__(self):
