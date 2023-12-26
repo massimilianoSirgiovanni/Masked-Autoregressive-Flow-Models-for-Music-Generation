@@ -27,9 +27,9 @@ class trainingModel():
         self.trReconList = []
 
     def trainModel(self, tr_set, val_set, batch_size, loss_function, parameter_funct=nn.Module.parameters, num_epochs=100, patience=5, optimizer=optim.Adam, learning_rate=1e-3, file_path='./savedObjects/model', saveModel=True, beta=0.1):
-        if batch_size > tr_set.shape[0]:
+        '''if batch_size > tr_set.shape[0]:
             print(f"{Fore.LIGHTRED_EX}WARNING: The batch size is larger than the number of instances!{Style.RESET_ALL}")
-
+'''
         if self.tr_set == None:
             self.tr_set = data.DataLoader(tr_set, batch_size=batch_size, shuffle=True)
 
@@ -49,10 +49,10 @@ class trainingModel():
                 self.valReconList = self.valReconList[0:self.trainedEpochs]
                 self.trReconList = self.trReconList[0:self.trainedEpochs]
             tr_loss_epoch = []
-            for batch_data in tqdm(self.tr_set, desc='Training: '):
+            for (batch_data, batch_y) in tqdm(self.tr_set, desc='Training: '):
                 with torch.autograd.detect_anomaly():
                     optimizer.zero_grad()
-                    output = model(batch_data)
+                    output = model(batch_data, genres=batch_y)
                     tr_loss = loss_function(output, batch_data, beta=beta)
                     if type(tr_loss) is tuple:
                         isRecon = True
@@ -67,9 +67,9 @@ class trainingModel():
             model.eval()
             with torch.no_grad():
                 val_loss_epoch = []
-                for batch_data in tqdm(self.val_set, desc='Validation: '):
+                for (batch_data, batch_y) in tqdm(self.val_set, desc='Validation: '):
 
-                    output_val = model(batch_data)
+                    output_val = model(batch_data, genres=batch_y)
                     val_loss = loss_function(output_val, batch_data, beta=beta)
                     if isRecon:
                         val_recon, val_loss = val_loss
@@ -108,15 +108,21 @@ class trainingModel():
         if saveModel == True:
             saveVariableInFile(file_path, self)
 
-    def generate(self, n_samples=1, u=None):
+    def generate(self, n_samples=1, u=None, genres=None):
         torch.seed()
-        x = self.bestModel.generate(n_samples=n_samples, u=u)
+        x = self.bestModel.generate(n_samples=n_samples, u=u, genres=genres)
         torch.manual_seed(seeds[0])
         return x
 
-    def testModel(self, test_set, set_name="input"):
+    def testModel(self, test_set, set_name="input", genres=None):
         print(f"Testing...")
-        generatedX = self.generate(u=test_set)
+        print(test_set.shape)
+        print(f"Test: {test_set[0:1, :, :]}")
+        u, nll = self.bestModel(test_set, genres)
+        print(u.shape)
+        generatedX = self.generate(u=u, genres=genres)
+        print(generatedX.shape)
+        print(f"Generated: {generatedX[0:1, :, :]}")
         norm = torch.norm(test_set - generatedX, p=2)/test_set.shape[0]
         print(f"Similarity measure (two-norm) between {set_name} and midi generator: {norm}")
         return norm
@@ -175,23 +181,43 @@ class trainingModel():
 
 
 
-def holdoutSplit(X, val_percentage=0.1, test_percentage=0.1):
-    N = X.shape[0]
-    idx_rand = torch.randperm(N)
-    N_val = int(N * val_percentage)
-    N_te = int(N * test_percentage)
-    N_tr = N - N_val - N_te
-    idx_tr = idx_rand[:N_tr]
-    idx_test = idx_rand[N_tr:N_tr + N_te]
-    idx_val = idx_rand[N_tr + N_te:]
-    X_tr = X[idx_tr]
-    X_val = X[idx_val]
-    X_test = X[idx_test]
+def holdoutSplit(X, Y, val_percentage=0.1, test_percentage=0.1):
+    if not exists(f'./savedObjects/datasets/{choosedInstrument}tr_dataset_program={choosedInstrument}') or not exists(
+            f'./savedObjects/datasets/{choosedInstrument}val_dataset_program={choosedInstrument}') or not exists(
+            f'./savedObjects/datasets/{choosedInstrument}test_dataset_program={choosedInstrument}'):
+        N = X.shape[0]
+        idx_rand = torch.randperm(N)
+        N_val = int(N * val_percentage)
+        N_te = int(N * test_percentage)
+        N_tr = N - N_val - N_te
+        idx_tr = idx_rand[:N_tr]
+        idx_test = idx_rand[N_tr:N_tr + N_te]
+        idx_val = idx_rand[N_tr + N_te:]
+        X_tr, Y_tr = X[idx_tr], Y[idx_tr]
+        X_val, Y_val = X[idx_val], Y[idx_val]
+        X_test, Y_test = X[idx_test], Y[idx_test]
+        tr_dataset = data.TensorDataset(X_tr, Y_tr)
+        saveVariableInFile(f'./savedObjects/datasets/tr_dataset_program={choosedInstrument}', tr_dataset)
+        print(f"{Fore.CYAN}Training Set Size: {Fore.GREEN}{len(tr_dataset)}{Style.RESET_ALL}")
+        val_dataset = data.TensorDataset(X_val, Y_val)
+        saveVariableInFile(f'./savedObjects/datasets/val_dataset_program={choosedInstrument}', val_dataset)
+        print(f"{Fore.CYAN}Validation Set Size: {Fore.GREEN}{len(val_dataset)}{Style.RESET_ALL}")
+        test_dataset = data.TensorDataset(X_test, Y_test)
+        saveVariableInFile(f'./savedObjects/datasets/test_dataset_program={choosedInstrument}', test_dataset)
+        print(f"{Fore.CYAN}Test Set Size: {Fore.GREEN}{len(test_dataset)}{Style.RESET_ALL}")
 
-    return X_tr, X_val, X_test
+    else:
+        tr_dataset = loadVariableFromFile(f'./savedObjects/datasets/tr_dataset_program={choosedInstrument}')
+        print(f"{Fore.CYAN}Training Set Size: {Fore.GREEN}{len(tr_dataset)}{Style.RESET_ALL}")
+        val_dataset = loadVariableFromFile(f'./savedObjects/datasets/val_dataset_program={choosedInstrument}')
+        print(f"{Fore.CYAN}Validation Set Size: {Fore.GREEN}{len(val_dataset)}{Style.RESET_ALL}")
+        test_dataset = loadVariableFromFile(f'./savedObjects/datasets/test_dataset_program={choosedInstrument}')
+        print(f"{Fore.CYAN}Test Set Size: {Fore.GREEN}{len(test_dataset)}{Style.RESET_ALL}")
+
+    return tr_dataset, val_dataset, test_dataset
 
 
-def generateAndSaveASong(model, song=None, file_path="./output/song", instrument=1):
+def generateAndSaveASong(model, song=None, genres=torch.tensor([0], dtype=torch.int32), file_path="./output/song", instrument=1):
     if song != None:
         if song.shape[0]>1:
             print(f"{Fore.LIGHTMAGENTA_EX}This method can generate only a song for time, it will beh generated only the first one passed as an argument{Style.RESET_ALL}")
@@ -199,7 +225,8 @@ def generateAndSaveASong(model, song=None, file_path="./output/song", instrument
         dictionary = piano_roll_to_dictionary(song[0], instrument)
         newMidi = piano_roll_to_midi(dictionary)
         saveMIDI(newMidi, f"{file_path}Input.mid")
-    output = model.generate(n_samples=1, u=song)
+        song, nll = model(song, genres)
+    output = model.generate(n_samples=1, u=song, genres=genres)
     dictionary = piano_roll_to_dictionary(output[0], instrument)
     newMidi = piano_roll_to_midi(dictionary)
     saveMIDI(newMidi, f"{file_path}Generated.mid")

@@ -3,10 +3,11 @@ from os.path import exists
 import random
 from colorama import Fore, Style
 import torch.nn as nn
+from genreAnalysis import getDictGenre
 
 current_directory = getcwd()
 
-choosedInstrument = 1
+choosedInstrument = 0
 
 if not exists(f"{current_directory}/savedObjects"):
     makedirs(f"{current_directory}/savedObjects")
@@ -36,8 +37,7 @@ directory_models_RNN = f"{current_directory}/savedObjects/models/RNN"
 directory_models_LSTM = f"{current_directory}/savedObjects/models/LSTM"
 directory_models_MAF = f"{current_directory}/savedObjects/models/MAF"
 
-choosedGenres = ['pop', 'rap', 'rock', 'classical']
-
+choosedGenres = list(getDictGenre("./amg").keys())
 
 latent_size_values = [16, 32, 64]
 hidden_size_values = [96, 128]

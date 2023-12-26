@@ -211,8 +211,6 @@ def getSingleInstrumentDatabaseLMD(directory, instrument):
     return dataset
 
 def binarize_predictions(predictions, threshold=0.5):
-    # Applica la soglia di attivazione
-    predictions = torch.sigmoid(predictions)
     binary_predictions = (predictions > threshold).int()
     return binary_predictions
 

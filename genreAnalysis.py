@@ -4,6 +4,7 @@ import os
 from spotipy.oauth2 import SpotifyClientCredentials
 from manageFiles import *
 from config import *
+import torch
 
 # Imposta le tue credenziali Spotify
 client_id = '106578ff192d4d98a67ec0221310d21d'
@@ -77,3 +78,33 @@ def selectGenre(genres):
     else:
         return None
 
+def extractGenre(file_name):
+    return file_name.lower()[8:-4]
+
+def getDictGenre(directory):
+    if exists("./savedObjects/datasets/dictGenres"):
+        dictGenres = loadVariableFromFile("./savedObjects/datasets/dictGenres")
+        return dictGenres
+    else:
+        dictGenres = {}
+    files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    for filename in files:
+        genre = extractGenre(filename)
+        with open(f"{directory}/{filename}", 'r') as file:
+            file_content = file.read()
+            dictGenres[genre] = file_content.split('\n')
+    saveVariableInFile("./savedObjects/datasets/dictGenres", dictGenres)
+    return dictGenres
+
+def getGenreFromId(file_name, dictGenre=None):
+    if dictGenre is None:
+        dictGenre = getDictGenre("./amg")
+    for i in dictGenre:
+        if file_name in dictGenre[i]:
+            return i
+    return None
+
+def gennreLabelToTensor(list_genres, choosedGenres):
+    genre_to_int = {label: idx for idx, label in enumerate(choosedGenres)}
+    genre_tensor = torch.LongTensor([genre_to_int[label] for label in list_genres])
+    return genre_tensor
