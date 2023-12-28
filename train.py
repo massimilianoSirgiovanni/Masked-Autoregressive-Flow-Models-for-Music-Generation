@@ -27,9 +27,9 @@ class trainingModel():
         self.trReconList = []
 
     def trainModel(self, tr_set, val_set, batch_size, loss_function, parameter_funct=nn.Module.parameters, num_epochs=100, patience=5, optimizer=optim.Adam, learning_rate=1e-3, file_path='./savedObjects/model', saveModel=True, beta=0.1):
-        '''if batch_size > tr_set.shape[0]:
+        if batch_size > val_set.tensors[0].shape[0]:
             print(f"{Fore.LIGHTRED_EX}WARNING: The batch size is larger than the number of instances!{Style.RESET_ALL}")
-'''
+
         if self.tr_set == None:
             self.tr_set = data.DataLoader(tr_set, batch_size=batch_size, shuffle=True)
 
@@ -52,7 +52,7 @@ class trainingModel():
             for (batch_data, batch_y) in tqdm(self.tr_set, desc='Training: '):
                 with torch.autograd.detect_anomaly():
                     optimizer.zero_grad()
-                    output = model(batch_data, genres=batch_y)
+                    output = model(batch_data, batch_y)
                     tr_loss = loss_function(output, batch_data, beta=beta)
                     if type(tr_loss) is tuple:
                         isRecon = True
@@ -69,7 +69,7 @@ class trainingModel():
                 val_loss_epoch = []
                 for (batch_data, batch_y) in tqdm(self.val_set, desc='Validation: '):
 
-                    output_val = model(batch_data, genres=batch_y)
+                    output_val = model(batch_data, batch_y)
                     val_loss = loss_function(output_val, batch_data, beta=beta)
                     if isRecon:
                         val_recon, val_loss = val_loss
@@ -114,16 +114,21 @@ class trainingModel():
         torch.manual_seed(seeds[0])
         return x
 
-    def testModel(self, test_set, set_name="input", genres=None):
-        print(f"Testing...")
-        print(test_set.shape)
-        print(f"Test: {test_set[0:1, :, :]}")
-        u, nll = self.bestModel(test_set, genres)
-        print(u.shape)
-        generatedX = self.generate(u=u, genres=genres)
-        print(generatedX.shape)
-        print(f"Generated: {generatedX[0:1, :, :]}")
-        norm = torch.norm(test_set - generatedX, p=2)/test_set.shape[0]
+    def testModel(self, test_set, set_name="input", batch_size=100):
+        test = data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
+        inputX = test_set.tensors[0]
+
+        finalGeneration = None
+        for (batch_data, batch_y) in tqdm(test, desc=f'Test on {set_name}: '):
+            print(f"Input {batch_data[0:1, :, :]}")
+            u, nll = self.bestModel(batch_data, batch_y)
+            generatedX = self.generate(u=u, genres=batch_y)
+            print(f"Generated {generatedX[0:1, :, :]}")
+            if finalGeneration is None:
+                finalGeneration = generatedX
+            else:
+                finalGeneration = torch.cat([finalGeneration, generatedX], dim=0)
+        norm = torch.norm(inputX - finalGeneration, p=2) / inputX.shape[0]
         print(f"Similarity measure (two-norm) between {set_name} and midi generator: {norm}")
         return norm
 
@@ -217,16 +222,18 @@ def holdoutSplit(X, Y, val_percentage=0.1, test_percentage=0.1):
     return tr_dataset, val_dataset, test_dataset
 
 
-def generateAndSaveASong(model, song=None, genres=torch.tensor([0], dtype=torch.int32), file_path="./output/song", instrument=1):
+def generateAndSaveASong(model, song=None, genres=torch.Tensor([0]), file_path="./output/song", instrument=0):
     if song != None:
         if song.shape[0]>1:
             print(f"{Fore.LIGHTMAGENTA_EX}This method can generate only a song for time, it will beh generated only the first one passed as an argument{Style.RESET_ALL}")
             song = song[0:1, :, :]
+        print(song[0])
         dictionary = piano_roll_to_dictionary(song[0], instrument)
         newMidi = piano_roll_to_midi(dictionary)
         saveMIDI(newMidi, f"{file_path}Input.mid")
-        song, nll = model(song, genres)
+        song, nll = model(song, genres=genres)
     output = model.generate(n_samples=1, u=song, genres=genres)
+    print(output[0])
     dictionary = piano_roll_to_dictionary(output[0], instrument)
     newMidi = piano_roll_to_midi(dictionary)
     saveMIDI(newMidi, f"{file_path}Generated.mid")

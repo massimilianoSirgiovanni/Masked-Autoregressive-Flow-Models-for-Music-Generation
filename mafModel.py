@@ -20,7 +20,7 @@ class MAFLayer(nn.Module):
         if madeType == "multivariate":
             self.made = MADEMultivariate(input_size, hidden_sizes, device=self.device)
         elif madeType == "multinotes":
-            self.made = MADEDifferentMaskDifferentWeight(input_size, hidden_sizes, device=self.device)
+            self.made = MADEDifferentMaskDifferentWeight(input_size, hidden_sizes , device=self.device)
         elif madeType == "univariate":
             self.made = MADEUnivariate(input_size, hidden_sizes, device=self.device)
         else:
@@ -44,32 +44,34 @@ class MAF(nn.Module):
         super().__init__()
         self.initialization = False
 
-    def parametersInitialization(self,  input_size: tuple[int], hidden_sizes: List, n_layers: int, num_genres=0, embedding_dim=50, device=None, madeType="univariate"):
+    def parametersInitialization(self,  input_size: tuple[int], hidden_sizes: List, n_layers: int, num_genre=0, embedding_dim=10, device=None, madeType="univariate"):
         if self.initialization == False:
             self.initialization = True
             self.input_size = input_size
             self.n_layers = n_layers
             self.hidden_sizes = hidden_sizes
             self.madeType = madeType.lower()
-            self.num_genres = num_genres
             self.embedding_dim = embedding_dim
-            if self.num_genres > 0:
+            self.num_genre = num_genre
+            if self.num_genre > 0:
                 self.embedded_input_size = (self.input_size[0], self.input_size[1] + self.embedding_dim)
-                self.embedding = nn.Embedding(self.num_genres, self.embedding_dim)
+                self.embedding = nn.Embedding(self.num_genre, self.embedding_dim)
+            else:
+                self.embedded_input_size = self.input_size
             if device == None:
                 self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             else:
                 self.device = device
             self.layers = nn.ModuleList()
             for _ in range(n_layers):
-                self.layers.append(MAFLayer(self.embedded_input_size, self.hidden_sizes, device=self.device, madeType=self.madeType))
+                self.layers.append(MAFLayer(self.embedded_input_size, self.hidden_sizes, device=self.device))
             self.madeType = self.layers[0].madeType
-
             self.threshold = 0.5
-
             self.output_layer = nn.Linear(self.embedded_input_size[1], self.input_size[1])
         else:
             print(f"{Fore.LIGHTMAGENTA_EX}Parameters where already initialized{Style.RESET_ALL}")
+
+
 
     def mergeInputGenre(self, x, genres):
         y = self.embedding(genres)
@@ -77,42 +79,41 @@ class MAF(nn.Module):
         u = torch.cat((x, y), dim=-1)
         return u
 
-    def forward(self, x, genres=0):
-        u = torch.permute(x, (0, 2, 1))
-        if self.num_genres > 0 and genres is not None:
-            u = self.mergeInputGenre(u, genres)
+    def forward(self, x, genres=None):
+        x = torch.permute(x, (0, 2, 1))
+        if self.num_genre > 0 and genres is not None:
+            mergedX = self.mergeInputGenre(x, genres)
+            u = mergedX
+        else:
+            u = x
         log_det_sum = torch.zeros(u.shape[0])
         for layer in self.layers:
             u, log_det = layer(u)
             log_det_sum += log_det
-        '''if self.num_genres > 0 and genres is not None:
+        if self.num_genre > 0 and genres is not None:
             output = self.output_layer(u)
-        else:'''
-        output = u
         output = torch.permute(output, (0, 2, 1))
-        generatedX = self.generate(u=output)
-        return output, self.negativeLogLikelihood(output, log_det_sum) + self.BCE(generatedX.type(torch.float16), x)
+        return output, self.negativeLogLikelihood(output, x, log_det_sum)
 
-    def negativeLogLikelihood(self, z, log_det):
-        negloglik_loss = - 0.5 * z.shape[1] * z.shape[2] * numpy.log(2 * numpy.pi) - 0.5 * torch.sum(z**2, dim=(1, 2)) + log_det
+    def negativeLogLikelihood(self, u, x, log_det):
+        negloglik_loss = - 0.5 * u.shape[1] * u.shape[2] * numpy.log(2 * numpy.pi) - 0.5 * torch.sum(u ** 2, dim=(1, 2)) + log_det
         negloglik_loss = - torch.mean(negloglik_loss)
-        return negloglik_loss
-
-    def BCE(self, recon_x, x):
-        bce_loss = nn.functional.binary_cross_entropy_with_logits(recon_x, x, reduction='none')
-        BCE = torch.sum(bce_loss, dim=2).mean()
-        return BCE
+        return negloglik_loss# - torch.sum(torch.log(1-x)) - torch.sum(torch.log(x))
 
 
     def generate(self, n_samples=1, u=None, genres=None):
         torch.set_printoptions(profile="full")
         x = torch.randn(n_samples, self.input_size[0], self.input_size[1]) if u is None else torch.permute(u, (0, 2, 1))
-        '''if self.num_genres > 0 and genres is not None:
-            x = self.mergeInputGenre(x, genres)'''
-        for layer in self.layers[::-1]:
-            x = layer.generate(n_samples, x)
-        if self.num_genres > 0:# and genres is not None:
+        if self.num_genre > 0 and genres is not None:
+            x = self.mergeInputGenre(x, genres)
+        self.eval()
+        with torch.no_grad():
+            for layer in self.layers[::-1]:
+                x = layer.generate(n_samples, x)
+        if self.num_genre > 0 and genres is not None:
             x = self.output_layer(x)
+        print(torch.permute(x, (0, 2, 1))[0:1, :, :])
+        print(self.threshold)
         x = binarize_predictions(x, self.threshold)
         torch.set_printoptions(profile="default")
         return torch.permute(x, (0, 2, 1))

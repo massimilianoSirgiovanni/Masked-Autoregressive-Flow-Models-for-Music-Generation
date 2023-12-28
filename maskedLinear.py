@@ -77,7 +77,7 @@ class MaskedLinearMultivariate(MaskedLinear):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x):
-        maskedWeight = torch.mul(self.weight, self.mask)
+        maskedWeight = torch.mul(self.weight, self.mask.unsqueeze(0).unsqueeze(2))
         maskedWeight = maskedWeight.reshape(maskedWeight.shape[0]*maskedWeight.shape[1], -1)
         output = torch.nn.functional.linear(x.reshape(x.shape[0], -1), maskedWeight, self.bias)
         output = output.reshape(-1, self.weight.shape[0], self.weight.shape[1])

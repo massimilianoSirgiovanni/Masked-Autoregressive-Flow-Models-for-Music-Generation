@@ -6,13 +6,17 @@ import random
 from config import directory_dataset, current_directory, choosedGenres
 from os import makedirs
 from os.path import exists
-from genreAnalysis import getArtistName, getGenreFromSpotify, selectGenre
+from genreAnalysis import getDictGenre, getGenreFromId, gennreLabelToTensor
+import pypianoroll
+import numpy as np
 
 default_instruments = range(0, 128)
 
 def midiFilters(midi_data, time_signature_chosen = (4, 4)):
     # Get the time signature
     try:
+        if len(midi_data.time_signature_changes) != 1:
+            print(f"MIDI file change hid time signature during the execution")
         time_signature = (midi_data.time_signature_changes[0].numerator, midi_data.time_signature_changes[0].denominator)
     except:
         return False
@@ -21,13 +25,13 @@ def midiFilters(midi_data, time_signature_chosen = (4, 4)):
         return False
     return True
 
+
+
 def midi_to_piano_roll(midi_data, ticks_per_beat=480, number_notes=128, num_bar=2, instruments=default_instruments):
     time_signature = (midi_data.time_signature_changes[0].numerator, midi_data.time_signature_changes[0].denominator)
     # Time synchronization of MIDI files
     midi_data.resolution = ticks_per_beat
-    #print(f"ticks_per_beat={ticks_per_beat}")
     ticks_per_unit = int(ticks_per_beat/time_signature[0]) # Default case is a "semiquaver"
-    #print(f"ticks_per_unit={ticks_per_unit}")
     # Initialize the piano roll's dimentions
     number_notes = number_notes + 3  # Added columns for: hold state, silent and ending
     time_steps = (num_bar * time_signature[0] * time_signature[1])
@@ -36,8 +40,8 @@ def midi_to_piano_roll(midi_data, ticks_per_beat=480, number_notes=128, num_bar=
     for instrument in midi_data.instruments:
         program = instrument.program
         if program in instruments:
-            piano_roll = torch.zeros((1, time_steps, number_notes))
             start_time, end_time = 0, 0
+            piano_roll = torch.zeros((1, time_steps, number_notes))
             for note in instrument.notes:
                 # Calcolo numero Time Step
                 start_time = int(midi_data.time_to_tick(note.start) / ticks_per_unit)
@@ -62,50 +66,79 @@ def midi_to_piano_roll(midi_data, ticks_per_beat=480, number_notes=128, num_bar=
                 for i in range(0, end_track):
                     if torch.sum(piano_roll[0, i], 0) == 0:
                         piano_roll[0, i, number_notes - 2] = 1
-                        #print("Silent State")
                 if program in piano_roll_dict:
-                    piano_roll_dict[program] = torch.cat((piano_roll_dict[program], piano_roll))
+                    piano_roll_dict[program] = torch.cat((piano_roll_dict[program], piano_roll), dim=0)
                 else:
                     piano_roll_dict[program] = piano_roll
 
     return piano_roll_dict
 
-def loadDataset(directory, instruments=default_instruments):
+def removeConsecutiveSilence(pianoroll):
+    consecutive_silence = torch.Tensor([128])
+    consecutive_silence = consecutive_silence.repeat(1, 32, 1)
+    index_consecutive = None
+    for i in range(pianoroll.size(0) - consecutive_silence.size(0) + 1):
+        if torch.equal(pianoroll[i:i + consecutive_silence.size(0)], consecutive_silence):
+            index_consecutive = i
+    if index_consecutive is not None:
+        pianoroll = torch.cat([pianoroll[:index_consecutive,:,:], pianoroll[index_consecutive + 1:,:,:]], dim=0)
+    return pianoroll
+
+def piano_roll_reduced_representation(pianoroll):
+    tensor_mask = (pianoroll != 0)
+    pianoroll[~tensor_mask] = 2
+    output = torch.argmin(pianoroll, dim=2).reshape(pianoroll.shape[0], pianoroll.shape[1], 1)
+    #output = torch.argmax(pianoroll, dim=2).reshape(pianoroll.shape[0], pianoroll.shape[1], 1)
+    return output
+
+def getSlidingPianoRolls(pianoroll, num_bar=2, timestep_per_bar=16, binary=True):
+    pianoroll = torch.Tensor(pianoroll)
+    tail = pianoroll.shape[0] % timestep_per_bar
+    pianoroll = pianoroll[:pianoroll.shape[0] - tail, :]
+    pianoroll_unfolded = torch.nn.functional.unfold(pianoroll.unsqueeze(0), kernel_size=(num_bar, 1), dilation=(timestep_per_bar, 1), stride=1)
+    pianoroll_unfolded = pianoroll_unfolded.reshape(num_bar, -1,  timestep_per_bar, 128)
+    pianoroll = torch.stack([pianoroll_unfolded[i, :, :, :] for i in range(num_bar)], dim=1)
+    pianoroll = pianoroll.reshape(pianoroll.shape[0], -1, pianoroll.shape[3])
+    if binary:
+        pianoroll[pianoroll != 0] = 1
+    silent_state = torch.zeros((pianoroll.shape[0], pianoroll.shape[1], 1))
+    pianoroll = torch.cat([pianoroll, silent_state], dim=2)
+    pianoroll[:, :, -1] = torch.sum(pianoroll, dim=2) == 0
+    return pianoroll
+
+def loadDataset(directory):
     print(f"Loading Dataset from {directory} ...")
     dataset_midi = {}
+    dictGenre = getDictGenre("./amg")
     for dirpath, dirnames, filenames in os.walk(directory):
-        for filename in [f for f in filenames if f.endswith(".mid")]:
-            metadataFile = dirpath.replace("lmd_matched", "lmd_matched_h5") + '.h5'
-            print(f"Metadata: {metadataFile}")
-            print(f"{dirpath}/{filename}")
+        for filename in [f for f in filenames if f.endswith(".npz")]:
             try:
-                artistName = getArtistName(metadataFile)
-                genres = getGenreFromSpotify(artistName)
-                print(genres)
-                genre = selectGenre(genres)
-                print(genre)
+                genre = getGenreFromId(dirpath[-18:], dictGenre=dictGenre)
                 if genre is None:
-                    print("Non appartiene ad un genere selezionato")
+                    raise Exception("Song not has genre")
                 else:
-                    print("Trasformazioni MIDI")
-                midi_file = pretty_midi.PrettyMIDI(f"{dirpath}/{filename}")
-                if midiFilters(midi_file):
-                    #print(f"Inserted: {filename}")
-                    #dataset_midi.append(f"{dirpath}/{filename}")
-                    local_dict = midi_to_piano_roll(midi_file, instruments=instruments)
-                    for i in instruments:
-                        if i in local_dict:
-                            if i in dataset_midi:
-                                dataset_midi[i] = torch.cat((dataset_midi[i], local_dict[i]))
+                    midi_path = f"{dirpath}/{filename}"
+                    midi_path = midi_path.replace("lpd/lpd_cleansed", "lmd_matched").replace("npz", "mid")
+                    midi_file = pretty_midi.PrettyMIDI(midi_path)
+                    if midiFilters(midi_file):
+                        multitrack = pypianoroll.from_pretty_midi(midi_file, resolution=4)
+                        for track in multitrack.tracks:
+                            piano_rolls = getSlidingPianoRolls(track.pianoroll)
+                            piano_rolls = piano_roll_reduced_representation(piano_rolls)
+                            piano_rolls = torch.unique(piano_rolls, dim=0) # Remove Duplicates
+                            piano_rolls = removeConsecutiveSilence(piano_rolls)
+                            program = track.program
+                            if program in dataset_midi:
+                                dataset_midi[program][0] = torch.cat((dataset_midi[program][0], piano_rolls))
                             else:
-                                dataset_midi[i] = local_dict[i]
-
+                                dataset_midi[program] = [piano_rolls, []]
+                            for j in range(0, piano_rolls.shape[0]):
+                                dataset_midi[program][1].append(genre)
             except Exception as e:
                 print(f"Skipped {dirpath}/{filename} cause of:\n{e}")
                 pass
-
     return dataset_midi
-    #torch.stack(dataset_midi, dim=0)
+
 
 def loadLMD(directory, starting_point="A", ending_point="Z", instruments=default_instruments):
     for i in range(ord(starting_point), ord(ending_point) + 1):
@@ -114,12 +147,14 @@ def loadLMD(directory, starting_point="A", ending_point="Z", instruments=default
             makedirs(f"{directory_dataset}/{chr(i)}")
             checkFile = False
         if checkFile == False or databaseLoadedInstruments(f"{directory_dataset}/{chr(i)}", instruments) == False:
-            tmp = loadDataset(f"{current_directory}/{directory}/{chr(i)}", instruments=instruments)
+            tmp = loadDataset(f"{current_directory}/{directory}/{chr(i)}")
             for instr in instruments:
                 if instr in tmp:
                     saveVariableInFile(f"{directory_dataset}/{chr(i)}/dataset_program={instr}", tmp[instr])
+                    print(tmp[instr][0].shape)
                 else:
                     saveVariableInFile(f"{directory_dataset}/{chr(i)}/dataset_program={instr}", None)
+                    print(None)
         print(f"Letter {chr(i)} downloaded")
     return True
 
@@ -192,25 +227,46 @@ def piano_roll_to_instrument(piano_roll, midi_data,  program=default_instruments
     return instrument
 
 
+def removeDuplicatesNoConsideringGenres(dataset, genres):
+    index = np.unique(dataset, return_index=True, axis=0)[1]
+
+    return dataset[index], genres[index]
+
 
 def getSingleInstrumentDatabaseLMD(directory, instrument):
     dataset = None
+    genre = None
     for i in range(ord("A"), ord("Z") + 1):
         if os.path.isfile(f"{directory}/{chr(i)}/dataset_program={instrument}"):
-            tmp = loadVariableFromFile(f"{directory}/{chr(i)}/dataset_program={instrument}")
-            if tmp != None:
-                print(tmp.shape)
+            input = loadVariableFromFile(f"{directory}/{chr(i)}/dataset_program={instrument}")
+            if input != None:
+                tmp, genreTmp = input
+                genreTmp = gennreLabelToTensor(genreTmp, choosedGenres)
+                genreTmp = genreTmp.unsqueeze(1).unsqueeze(2).expand(-1, tmp.shape[1], 1)
+                tmp = torch.cat([tmp, genreTmp], dim=2)
+                #tmp, genreTmp = removeDuplicates(tmp, genreTmp)
+                tmp = torch.unique(tmp, dim=0)  # Remove Duplicatesù
                 if dataset != None:
                     dataset = torch.cat((dataset, tmp))
+                    #genre = torch.cat((genre, genreTmp))
+                    #dataset, genre = removeDuplicates(dataset, genre)
+                    dataset = torch.unique(dataset, dim=0)  # Remove Duplicates
+                    print(f"Complete Dataset: {dataset.shape}")
                 else:
                     dataset = tmp
+                    genre = genreTmp
+
     if dataset != None:
-        saveVariableInFile(f"{directory}/dataset_complete_program={instrument}", dataset)
+        newDataset = torch.unique(dataset, dim=0)  # Remove Duplicates
+        dataset = newDataset[:, :, :-1]
+        genre = newDataset[:, 0, -1]
+        saveVariableInFile(f"{directory}/dataset_complete_program={instrument}", (dataset, genre))
     else:
         print(f"There are no tracks associated with the instrument={instrument}")
-    return dataset
+    return dataset, genre
 
 def binarize_predictions(predictions, threshold=0.5):
+    # Applica la soglia di attivazione
     binary_predictions = (predictions > threshold).int()
     return binary_predictions
 

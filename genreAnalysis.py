@@ -108,3 +108,4 @@ def gennreLabelToTensor(list_genres, choosedGenres):
     genre_to_int = {label: idx for idx, label in enumerate(choosedGenres)}
     genre_tensor = torch.LongTensor([genre_to_int[label] for label in list_genres])
     return genre_tensor
+

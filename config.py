@@ -9,6 +9,8 @@ current_directory = getcwd()
 
 choosedInstrument = 0
 
+
+
 if not exists(f"{current_directory}/savedObjects"):
     makedirs(f"{current_directory}/savedObjects")
 
