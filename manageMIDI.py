@@ -74,15 +74,8 @@ def midi_to_piano_roll(midi_data, ticks_per_beat=480, number_notes=128, num_bar=
     return piano_roll_dict
 
 def removeConsecutiveSilence(pianoroll):
-    consecutive_silence = torch.Tensor([128])
-    consecutive_silence = consecutive_silence.repeat(1, 32, 1)
-    index_consecutive = None
-    for i in range(pianoroll.size(0) - consecutive_silence.size(0) + 1):
-        if torch.equal(pianoroll[i:i + consecutive_silence.size(0)], consecutive_silence):
-            index_consecutive = i
-    if index_consecutive is not None:
-        pianoroll = torch.cat([pianoroll[:index_consecutive,:,:], pianoroll[index_consecutive + 1:,:,:]], dim=0)
-    return pianoroll
+    index = (torch.where(torch.sum(pianoroll[:, :, :-1], dim=(1, 2)) != 0))
+    return pianoroll[index]
 
 def piano_roll_reduced_representation(pianoroll):
     tensor_mask = (pianoroll != 0)
@@ -117,23 +110,25 @@ def loadDataset(directory):
                 if genre is None:
                     raise Exception("Song not has genre")
                 else:
-                    midi_path = f"{dirpath}/{filename}"
+                    '''midi_path = f"{dirpath}/{filename}"
                     midi_path = midi_path.replace("lpd/lpd_cleansed", "lmd_matched").replace("npz", "mid")
-                    midi_file = pretty_midi.PrettyMIDI(midi_path)
-                    if midiFilters(midi_file):
-                        multitrack = pypianoroll.from_pretty_midi(midi_file, resolution=4)
-                        for track in multitrack.tracks:
-                            piano_rolls = getSlidingPianoRolls(track.pianoroll)
-                            piano_rolls = piano_roll_reduced_representation(piano_rolls)
-                            piano_rolls = torch.unique(piano_rolls, dim=0) # Remove Duplicates
-                            piano_rolls = removeConsecutiveSilence(piano_rolls)
-                            program = track.program
-                            if program in dataset_midi:
-                                dataset_midi[program][0] = torch.cat((dataset_midi[program][0], piano_rolls))
-                            else:
-                                dataset_midi[program] = [piano_rolls, []]
-                            for j in range(0, piano_rolls.shape[0]):
-                                dataset_midi[program][1].append(genre)
+                    midi_file = pretty_midi.PrettyMIDI(midi_path)'''
+                    '''if midiFilters(midi_file):
+                        multitrack = pypianoroll.from_pretty_midi(midi_file, resolution=4)'''
+                    multitrack = pypianoroll.load(f"{dirpath}/{filename}")
+                    multitrack.set_resolution(4)
+                    for track in multitrack.tracks:
+                        piano_rolls = getSlidingPianoRolls(track.pianoroll)
+                        #piano_rolls = piano_roll_reduced_representation(piano_rolls)
+                        piano_rolls = torch.unique(piano_rolls, dim=0) # Remove Duplicates
+                        piano_rolls = removeConsecutiveSilence(piano_rolls)
+                        program = track.program
+                        if program in dataset_midi:
+                            dataset_midi[program][0] = torch.cat((dataset_midi[program][0], piano_rolls))
+                        else:
+                            dataset_midi[program] = [piano_rolls, []]
+                        for j in range(0, piano_rolls.shape[0]):
+                            dataset_midi[program][1].append(genre)
             except Exception as e:
                 print(f"Skipped {dirpath}/{filename} cause of:\n{e}")
                 pass
@@ -232,6 +227,13 @@ def removeDuplicatesNoConsideringGenres(dataset, genres):
 
     return dataset[index], genres[index]
 
+def sparse_to_dense(tensor):
+    if tensor.layout != torch.sparse_coo:
+        print(f"ATTENTION: Tensor is not sparse")
+        dense_tensor = tensor
+    else:
+        dense_tensor = tensor.to_dense()
+    return dense_tensor
 
 def getSingleInstrumentDatabaseLMD(directory, instrument):
     dataset = None
@@ -242,6 +244,8 @@ def getSingleInstrumentDatabaseLMD(directory, instrument):
             if input != None:
                 tmp, genreTmp = input
                 genreTmp = gennreLabelToTensor(genreTmp, choosedGenres)
+                tmp = tmp.to(dtype=torch.int8)
+                genreTmp = genreTmp.to(dtype=torch.int8)
                 genreTmp = genreTmp.unsqueeze(1).unsqueeze(2).expand(-1, tmp.shape[1], 1)
                 tmp = torch.cat([tmp, genreTmp], dim=2)
                 #tmp, genreTmp = removeDuplicates(tmp, genreTmp)
@@ -258,8 +262,8 @@ def getSingleInstrumentDatabaseLMD(directory, instrument):
 
     if dataset != None:
         newDataset = torch.unique(dataset, dim=0)  # Remove Duplicates
-        dataset = newDataset[:, :, :-1]
-        genre = newDataset[:, 0, -1]
+        dataset = newDataset[:, :, :-1].to_sparse_coo()
+        genre = newDataset[:, 0, -1].to_sparse_coo()
         saveVariableInFile(f"{directory}/dataset_complete_program={instrument}", (dataset, genre))
     else:
         print(f"There are no tracks associated with the instrument={instrument}")

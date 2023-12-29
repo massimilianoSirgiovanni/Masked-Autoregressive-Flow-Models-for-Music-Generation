@@ -14,14 +14,26 @@ from config import *
 
 import torch
 
-#countGenres("./lmd_matched_h5")
-#loadDataset("./lpd/lpd_cleansed")
 
+#countGenres("./lmd_matched_h5")
 '''loadLMD("./lpd/lpd_cleansed", ending_point='Z')
 exit(0)'''
+def estimateDatasetsSize():
+    for instrument in range(0, 128):
+        for i in range(ord("A"), ord("A") + 1):
+            if os.path.isfile(f"./savedObjects/datasets/2_bar/{chr(i)}/dataset_program={instrument}"):
+                input = loadVariableFromFile(f"./savedObjects/datasets/2_bar/{chr(i)}/dataset_program={instrument}")
+                if input != None:
+                    print(input[0].shape)
+                else:
+                    print(input)
 
-dataset, genres = loadVariableFromFile(f"./savedObjects/datasets/2_bar/dataset_complete_program=0")
-#dataset, genres = getSingleInstrumentDatabaseLMD(f"./savedObjects/datasets/2_bar", 0)
+
+
+#dataset, genres = loadVariableFromFile(f"./savedObjects/datasets/2_bar/dataset_complete_program=27")
+
+dataset, genres = getSingleInstrumentDatabaseLMD(f"./savedObjects/datasets/2_bar", 0) # 25 27 29 30 33 35 48
+print(dataset)
 print(f"Piano Roll Dataset: {dataset.shape}")
 print(f"Genre Labels: {genres.shape}")
 exit()
@@ -136,7 +148,7 @@ print({label: idx for idx, label in enumerate(choosedGenres)})
 generateAndSaveASong(trainObj.bestModel, tr_set.tensors[0][100:101, :, notes], genres=tr_set.tensors[1][100:101], file_path=f"./output/trSetOriginal", instrument=choosedInstrument)
 exit(0)
 print("\n--------------------------------------------------\n")
-generateAndSaveASong(trainObj, tr_set.tensors[0][30:31, :, notes], genres=torch.tensor([1], dtype=torch.int32), file_path=f"./output/trSetCountry", instrument=choosedInstrument)
+generateAndSaveASong(trainObj, tr_set.tensors[0][30:31, :, notes], genres=torch.tensor([1], dtype=torch.int8), file_path=f"./output/trSetCountry", instrument=choosedInstrument)
 print("\n--------------------------------------------------\n")
 exit(0)
 generateAndSaveASong(trainObj, tr_set[60:61, :, notes], file_path=f"./output/trSet2", instrument=choosedInstrument)
