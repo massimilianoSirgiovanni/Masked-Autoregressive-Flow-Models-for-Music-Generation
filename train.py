@@ -1,7 +1,7 @@
 import random
 
-import numpy
-
+from colorama import Fore, Style
+import accuracyMetrics
 from manageFiles import *
 import torch.utils.data as data
 from tqdm import tqdm
@@ -23,10 +23,8 @@ class trainingModel():
         self.bestValLoss = None
         self.tr_set = None
         self.val_set = None
-        self.valReconList = []
-        self.trReconList = []
 
-    def trainModel(self, tr_set, val_set, batch_size, loss_function, parameter_funct=nn.Module.parameters, num_epochs=100, patience=5, optimizer=optim.Adam, learning_rate=1e-3, file_path='./savedObjects/model', saveModel=True, beta=0.1):
+    def trainModel(self, tr_set, val_set, batch_size, loss_function, parameter_funct=torch.nn.Module.parameters, num_epochs=100, patience=5, optimizer=optim.Adam, learning_rate=1e-3, file_path='./savedObjects/model', saveModel=True, beta=0.1):
         if batch_size > val_set.tensors[0].shape[0]:
             print(f"{Fore.LIGHTRED_EX}WARNING: The batch size is larger than the number of instances!{Style.RESET_ALL}")
 
@@ -40,23 +38,19 @@ class trainingModel():
         optimizer = optimizer(parameter_funct(model), lr=learning_rate)
 
         index_Patience = patience
-        isRecon = False
         self.trainedEpochs = self.bestEpoch + 1
         for epoch in range(self.trainedEpochs, num_epochs):
             if len(self.trLossList) > self.trainedEpochs:
                 self.trLossList = self.trLossList[0:self.trainedEpochs]
                 self.valLossList = self.valLossList[0:self.trainedEpochs]
-                self.valReconList = self.valReconList[0:self.trainedEpochs]
-                self.trReconList = self.trReconList[0:self.trainedEpochs]
             tr_loss_epoch = []
             for (batch_data, batch_y) in tqdm(self.tr_set, desc='Training: '):
+                batch_data = sparse_to_dense(batch_data).int()
+                batch_y = sparse_to_dense(batch_y).int()
                 with torch.autograd.detect_anomaly():
                     optimizer.zero_grad()
                     output = model(batch_data, batch_y)
                     tr_loss = loss_function(output, batch_data, beta=beta)
-                    if type(tr_loss) is tuple:
-                        isRecon = True
-                        tr_recon, tr_loss = tr_loss
                     tr_loss.backward()
                     max_grad_norm = 1.0
                     torch.nn.utils.clip_grad_norm_(parameter_funct(model), max_grad_norm)
@@ -68,21 +62,21 @@ class trainingModel():
             with torch.no_grad():
                 val_loss_epoch = []
                 for (batch_data, batch_y) in tqdm(self.val_set, desc='Validation: '):
-
+                    batch_data = sparse_to_dense(batch_data).int()
+                    batch_y = sparse_to_dense(batch_y).int()
                     output_val = model(batch_data, batch_y)
                     val_loss = loss_function(output_val, batch_data, beta=beta)
-                    if isRecon:
-                        val_recon, val_loss = val_loss
                     val_loss_epoch.append(val_loss.item())
 
             self.trainedEpochs = epoch + 1
-            tr_loss_mean = numpy.array(tr_loss_epoch).mean()
-            val_loss_mean = numpy.array(val_loss_epoch).mean()
+            print(np.array(tr_loss_epoch))
+            print(np.array(val_loss_epoch))
+            tr_loss_mean = tr_loss_epoch[-1]#numpy.array(tr_loss_epoch).mean()
+            val_loss_mean = val_loss_epoch[-1]#numpy.array(val_loss_epoch).mean()
+            print(tr_loss_mean)
+            print(val_loss_mean)
             self.trLossList.append(tr_loss_mean)
             self.valLossList.append(val_loss_mean)
-            if isRecon:
-                self.trReconList.append(tr_recon.item())
-                self.valReconList.append(val_recon.item())
             if self.bestValLoss == None or self.bestValLoss >= val_loss_mean:
                 self.bestValLoss = val_loss_mean
                 self.bestEpoch = epoch
@@ -98,39 +92,47 @@ class trainingModel():
                     break
                 print(f"EARLY STOPPING: Patience Epochs remained {index_Patience}")
 
-            out_string = f'Epoch [{epoch + 1}/{num_epochs}], Tr Loss: {tr_loss_mean.item():.4f}, '
-            if isRecon:
-                out_string = out_string + f'Tr Recon: {tr_recon.item():.4f}, Val Loss: {val_loss_mean.item():.4f}, Val Recon: {val_recon.item():.4f}'
-            else:
-                out_string = out_string + f'Val Loss: {val_loss_mean.item():.4f}'
-
-            print(out_string)
+            print(f'Epoch [{epoch + 1}/{num_epochs}], Tr Loss: {tr_loss_mean:.4f}, Val Loss: {val_loss_mean:.4f}')
         if saveModel == True:
             saveVariableInFile(file_path, self)
 
     def generate(self, n_samples=1, u=None, genres=None):
         torch.seed()
-        x = self.bestModel.generate(n_samples=n_samples, u=u, genres=genres)
+        u = self.bestModel.generate(n_samples=n_samples, u=u, genres=genres)
         torch.manual_seed(seeds[0])
-        return x
+        return u
 
     def testModel(self, test_set, set_name="input", batch_size=100):
         test = data.DataLoader(test_set, batch_size=batch_size, shuffle=False)
-        inputX = test_set.tensors[0]
-
-        finalGeneration = None
+        #inputX = test_set.tensors[0]
+        #finalGeneration = None
+        del test_set
+        prec = 0
+        acc = 0
+        rec = 0
         for (batch_data, batch_y) in tqdm(test, desc=f'Test on {set_name}: '):
-            print(f"Input {batch_data[0:1, :, :]}")
-            u, nll = self.bestModel(batch_data, batch_y)
-            generatedX = self.generate(u=u, genres=batch_y)
-            print(f"Generated {generatedX[0:1, :, :]}")
-            if finalGeneration is None:
+            batch_data = sparse_to_dense(batch_data).int()
+            u, _ = self.bestModel(batch_data, batch_y); del _
+            generatedX = self.generate(u=u, genres=batch_y); del u, batch_y
+            '''if finalGeneration is None:
                 finalGeneration = generatedX
             else:
-                finalGeneration = torch.cat([finalGeneration, generatedX], dim=0)
-        norm = torch.norm(inputX - finalGeneration, p=2) / inputX.shape[0]
-        print(f"Similarity measure (two-norm) between {set_name} and midi generator: {norm}")
-        return norm
+                finalGeneration = torch.cat([finalGeneration, generatedX], dim=0)'''
+            #finalGeneration.to_sparse_coo()
+            prec += accuracyMetrics.precision_with_flatten(generatedX, batch_data)
+            print(f"Precision: {accuracyMetrics.precision_with_flatten(generatedX, batch_data)}")
+            rec += accuracyMetrics.recall_with_flatten(generatedX, batch_data)
+            print(f"Recall: {accuracyMetrics.recall_with_flatten(generatedX, batch_data)}")
+            acc += accuracyFunct(generatedX, batch_data)
+            print(f"Similarity measure between {set_name} and midi generator: {accuracyFunct(generatedX, batch_data)}")
+            del generatedX, batch_data
+            print("End")
+        print(len(test))
+        print(f"Precision: {prec/len(test)}")
+        print(f"Recall: {rec/len(test)}")
+        accuracy = acc/len(test)
+        print(f"Similarity measure between {set_name} and midi generator: {accuracy}")
+        return accuracy
 
     '''def predict(self, test=None, seq_len=32):
         self.bestModel.eval()
@@ -147,12 +149,8 @@ class trainingModel():
 
 
     def __str__(self):
-        if len(self.valReconList) == 0:
-            best_recon = None
-        else:
-            best_recon = self.valReconList[self.bestEpoch]
         string = f"\nTRAINED MODEL:\n {str(self.bestModel)}"
-        string = string + f"\nTRAINING STATS:\n-  Trained for: {self.trainedEpochs} Epochs\n-  Best Epoch: {self.bestEpoch}\n-  Best Validation Loss: {self.bestValLoss}\n- Validation Reconstruction: {best_recon}\n"
+        string = string + f"\nTRAINING STATS:\n-  Trained for: {self.trainedEpochs} Epochs\n-  Best Epoch: {self.bestEpoch}\n-  Best Validation Loss: {self.bestValLoss}\n"
         return string
 
     def plot_loss(self, type=''):
@@ -186,10 +184,12 @@ class trainingModel():
 
 
 
-def holdoutSplit(X, Y, val_percentage=0.1, test_percentage=0.1):
+def holdoutSplit(X, Y, notes, val_percentage=0.1, test_percentage=0.1):
     if not exists(f'./savedObjects/datasets/{choosedInstrument}tr_dataset_program={choosedInstrument}') or not exists(
             f'./savedObjects/datasets/{choosedInstrument}val_dataset_program={choosedInstrument}') or not exists(
             f'./savedObjects/datasets/{choosedInstrument}test_dataset_program={choosedInstrument}'):
+        X = sparse_to_dense(X)[:, :, notes]
+        Y = sparse_to_dense(Y)
         N = X.shape[0]
         idx_rand = torch.randperm(N)
         N_val = int(N * val_percentage)
@@ -201,13 +201,13 @@ def holdoutSplit(X, Y, val_percentage=0.1, test_percentage=0.1):
         X_tr, Y_tr = X[idx_tr], Y[idx_tr]
         X_val, Y_val = X[idx_val], Y[idx_val]
         X_test, Y_test = X[idx_test], Y[idx_test]
-        tr_dataset = data.TensorDataset(X_tr, Y_tr)
+        tr_dataset = data.TensorDataset(X_tr.to_sparse_coo(), Y_tr.to_sparse_coo())
         saveVariableInFile(f'./savedObjects/datasets/tr_dataset_program={choosedInstrument}', tr_dataset)
         print(f"{Fore.CYAN}Training Set Size: {Fore.GREEN}{len(tr_dataset)}{Style.RESET_ALL}")
-        val_dataset = data.TensorDataset(X_val, Y_val)
+        val_dataset = data.TensorDataset(X_val.to_sparse_coo(), Y_val.to_sparse_coo())
         saveVariableInFile(f'./savedObjects/datasets/val_dataset_program={choosedInstrument}', val_dataset)
         print(f"{Fore.CYAN}Validation Set Size: {Fore.GREEN}{len(val_dataset)}{Style.RESET_ALL}")
-        test_dataset = data.TensorDataset(X_test, Y_test)
+        test_dataset = data.TensorDataset(X_test.to_sparse_coo(), Y_test.to_sparse_coo())
         saveVariableInFile(f'./savedObjects/datasets/test_dataset_program={choosedInstrument}', test_dataset)
         print(f"{Fore.CYAN}Test Set Size: {Fore.GREEN}{len(test_dataset)}{Style.RESET_ALL}")
 
@@ -221,19 +221,3 @@ def holdoutSplit(X, Y, val_percentage=0.1, test_percentage=0.1):
 
     return tr_dataset, val_dataset, test_dataset
 
-
-def generateAndSaveASong(model, song=None, genres=torch.Tensor([0]), file_path="./output/song", instrument=0):
-    if song != None:
-        if song.shape[0]>1:
-            print(f"{Fore.LIGHTMAGENTA_EX}This method can generate only a song for time, it will beh generated only the first one passed as an argument{Style.RESET_ALL}")
-            song = song[0:1, :, :]
-        print(song[0])
-        dictionary = piano_roll_to_dictionary(song[0], instrument)
-        newMidi = piano_roll_to_midi(dictionary)
-        saveMIDI(newMidi, f"{file_path}Input.mid")
-        song, nll = model(song, genres=genres)
-    output = model.generate(n_samples=1, u=song, genres=genres)
-    print(output[0])
-    dictionary = piano_roll_to_dictionary(output[0], instrument)
-    newMidi = piano_roll_to_midi(dictionary)
-    saveMIDI(newMidi, f"{file_path}Generated.mid")

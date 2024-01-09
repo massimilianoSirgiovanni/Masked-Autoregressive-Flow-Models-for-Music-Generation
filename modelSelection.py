@@ -2,6 +2,7 @@ import itertools
 from vaeModel import *
 from train import *
 import os
+from initFolders import directory_models_RNN
 
 def modelSelection(tr_set, val_set, model, loss_function=loss_function_VAE, num_epochs=100, patience=20, directory_models=directory_models_RNN):
 
