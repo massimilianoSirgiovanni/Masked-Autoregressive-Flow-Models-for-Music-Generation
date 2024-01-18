@@ -34,11 +34,13 @@ class MaskedLinearUnivariate(MaskedLinear):
         self.mask = None
 
     def forward(self, x, y):
-        #maskedWeight = torch.mul(self.weight, self.mask)
         maskedWeight = torch.einsum("got, ot -> got", self.weight, self.mask)
         genreWeight = torch.einsum("bg, got -> bot", y, maskedWeight)
-        #output = torch.nn.functional.linear(x.float(), maskedWeight, self.bias)
-        return torch.einsum("bnt, bot -> bno", x.float(), genreWeight) + self.bias
+        output = torch.einsum("bnt, bot -> bno", x.float(), genreWeight)
+        if self.bias != None:
+            return output + self.bias
+        else:
+            return output
 
 
 class MaskedLinearMultinotes(MaskedLinear):
@@ -59,7 +61,6 @@ class MaskedLinearMultinotes(MaskedLinear):
 
 
     def forward(self, x, y):
-        #maskedW = torch.einsum("ont, ot -> ont", self.weight, self.mask)
         maskedWeight = torch.einsum("gont, ot -> gont", self.weight, self.mask)
         genreWeight = torch.einsum("bg, gont -> bont", y, maskedWeight)
         return torch.einsum("bnt, bont -> bno", x.float(), genreWeight) + self.bias
@@ -94,8 +95,3 @@ class MaskedLinearMultivariate(MaskedLinear):
         maskedWeight = torch.einsum("gdont, ot -> gdont", self.weight, self.mask)
         maskedWeight = torch.einsum("gdont, bg -> bdont", maskedWeight, y)
         return torch.einsum("bnt, bdont -> bdo", x.float(), maskedWeight) + self.bias
-        
-        '''maskedWeight = torch.mul(self.weight, self.mask.unsqueeze(0).unsqueeze(2))
-        maskedWeight = maskedWeight.reshape(maskedWeight.shape[0]*maskedWeight.shape[1], -1)
-        output = torch.nn.functional.linear(x.reshape(x.shape[0], -1), maskedWeight, self.bias)
-        output = output.reshape(-1, self.weight.shape[0], self.weight.shape[1])'''

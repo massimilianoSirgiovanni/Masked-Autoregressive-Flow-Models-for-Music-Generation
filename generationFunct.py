@@ -4,12 +4,11 @@ from manageMIDI import *
 from colorama import Fore, Style
 
 
-def generateFromLatentSpace(model, latent_space, genre=torch.Tensor([0]), file_path="./output/song", instrument=0):
-    print(genre)
-    output = model.generate(n_samples=latent_space.shape[0], u=latent_space, genres=genre)
-    print(output)
-    end = latent_space.shape[0]
-    if latent_space.shape[0] > 10:
+def generateFromLatentSpace(model, latent_space, genre=torch.Tensor([0]), file_path="./output/song", instrument=0, seed=None):
+    n_samples = latent_space.shape[0] if latent_space != None else 1
+    output = model.generate(n_samples=n_samples, u=latent_space, genres=genre, seed=seed)
+    end = n_samples
+    if end > 10:
         print(f"{Fore.YELLOW}WARNING: This method can only save 10 songs per time as a MIDI.\n      Therefore, only the first 10 will be saved{Style.RESET_ALL}")
         end = 10
     for i in range(0, end):
@@ -26,7 +25,7 @@ def latentSpaceInterpolation(model, first_song: tuple[torch.Tensor], second_song
 
 
 
-def generateAndSaveASong(model, song=None, genres=torch.Tensor([0]), file_path="./output/song", instrument=0):
+def generateAndSaveASong(model, song=None, genres=torch.Tensor([0]), file_path="./output/song", instrument=0, seed=None):
     if song != None:
         genre = song[1]
         song = song[0]
@@ -36,10 +35,7 @@ def generateAndSaveASong(model, song=None, genres=torch.Tensor([0]), file_path="
         dictionary = piano_roll_to_dictionary(song[0], instrument)
         newMidi = piano_roll_to_midi(dictionary)
         saveMIDI(newMidi, f"{file_path}Input.mid")
-        print(genres)
-        song_old, _ = model(song, genres=genre)
-        song, _ = model(song, genres=genres)
-        print(song_old)
+        song, _ = model(song, genres=genre)
         print(song)
-    return generateFromLatentSpace(model, song, genres, file_path, instrument)
+    return generateFromLatentSpace(model, song, genres, file_path, instrument, seed=seed)
 

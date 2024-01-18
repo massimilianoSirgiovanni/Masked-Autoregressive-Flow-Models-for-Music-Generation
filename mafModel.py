@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 
 class MAFLayer(nn.Module):
-    def __init__(self,  input_size: tuple[int], hidden_sizes: List, device, num_genres: int = 0, madeType="univariate"):
+    def __init__(self,  input_size: tuple[int], hidden_sizes: List, device, num_genres: int = 0, madeType="univariate", activationLayer='sigmoid'):
         super(MAFLayer, self).__init__()
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
@@ -19,19 +19,18 @@ class MAFLayer(nn.Module):
         self.madeType = madeType
         self.num_genres = num_genres
         if madeType == "multivariate":
-            self.made = MADEMultivariate(input_size, hidden_sizes, num_genres=num_genres)
+            self.made = MADEMultivariate(input_size, hidden_sizes, num_genres=num_genres, activationLayer=activationLayer)
         elif madeType == "multinotes":
-            self.made = MADEDifferentMaskDifferentWeight(input_size, hidden_sizes, num_genres=num_genres)
+            self.made = MADEDifferentMaskDifferentWeight(input_size, hidden_sizes, num_genres=num_genres, activationLayer=activationLayer)
         elif madeType == "univariate":
-            self.made = MADEUnivariate(input_size, hidden_sizes, num_genres=num_genres)
+            self.made = MADEUnivariate(input_size, hidden_sizes, num_genres=num_genres, activationLayer=activationLayer)
         else:
             self.madeType = "univariate"
-            print(f"{Fore.YELLOW}The string:{madeType} does not match any MADE type, therefore was used the default type :\"univariate\"{Style.RESET_ALL}")
-            self.made = MADEUnivariate(input_size, hidden_sizes, num_genres=num_genres)
+            print(f"{Fore.RED}WARNING! The string {Fore.LIGHTGREEN_EX}\"{madeType}\"{Fore.RED} does not match any MADE type, therefore was used the default type --> {Fore.LIGHTGREEN_EX}\"univariate\"{Style.RESET_ALL}")
+            self.made = MADEUnivariate(input_size, hidden_sizes, num_genres=num_genres, activationLayer=activationLayer)
 
     def forward(self, x, genres):
-        out = self.made(x, genres)
-        mu, log_p = torch.chunk(out, 2, dim=2)
+        mu, log_p = self.made(x, genres)
         mu = mu.to(self.device); log_p = log_p.to(self.device)
         u = (x - mu) * torch.exp(0.5 * log_p)
         return u, 0.5*torch.sum(log_p, dim=(1, 2))
@@ -45,7 +44,7 @@ class MAF(nn.Module):
         super().__init__()
         self.initialization = False
 #
-    def parametersInitialization(self,  input_size: tuple[int], hidden_sizes: List, n_layers: int, num_genres=0, device=None, madeType="univariate"):
+    def parametersInitialization(self,  input_size: tuple[int], hidden_sizes: List, n_layers: int, num_genres=0, device=None, madeType="univariate", activationLayer='sigmoid'):
         if self.initialization == False:
             self.initialization = True
             self.input_size = input_size
@@ -59,11 +58,12 @@ class MAF(nn.Module):
                 self.device = device
             self.layers = nn.ModuleList()
             for _ in range(n_layers):
-                self.layers.append(MAFLayer(self.input_size, self.hidden_sizes, device=self.device, num_genres=self.num_genres, madeType=self.madeType))
+                self.layers.append(MAFLayer(self.input_size, self.hidden_sizes, device=self.device, num_genres=self.num_genres, madeType=self.madeType, activationLayer=activationLayer))
             self.madeType = self.layers[0].madeType
             self.threshold = 0.5
         else:
-            print(f"{Fore.LIGHTMAGENTA_EX}Parameters where already initialized{Style.RESET_ALL}")
+            print(f"{Fore.RED}WARNING! Parameters where already initialized{Style.RESET_ALL}")
+
 
 
 
@@ -81,20 +81,28 @@ class MAF(nn.Module):
         for layer in self.layers:
             u, log_det = layer(u, genres)
             log_det_sum += log_det
-        output = torch.permute(u, (0, 2, 1))
-        return output, self.negativeLogLikelihood(output, x, log_det_sum)
+        u = torch.permute(u, (0, 2, 1))
+        return u, self.negativeLogLikelihood(u, log_det_sum)
 
-    def negativeLogLikelihood(self, u, x, log_det):
-        negloglik_loss = - (0.5 * u.shape[1] * u.shape[2] * numpy.log(2 * numpy.pi)) - (0.5 * torch.sum(u ** 2, dim=(1, 2))) + log_det
-        negloglik_loss = - torch.mean(negloglik_loss)
-        return negloglik_loss# - torch.sum(torch.log(1-x)) - torch.sum(torch.log(x))
+    def negativeLogLikelihood(self, u, log_det):
+        negloglik_loss = (0.5 * torch.sum(u ** 2, dim=(1, 2)))
+        negloglik_loss += 0.5 * u.shape[1] * u.shape[2] * numpy.log(2 * numpy.pi)
+        negloglik_loss -= log_det
+        negloglik_loss = torch.mean(negloglik_loss)
+        return negloglik_loss
 
 
-    def generate(self, n_samples=1, u=None, genres=None):
-        x = torch.randn(n_samples, self.input_size[0], self.input_size[1]) if u is None else torch.permute(u, (0, 2, 1));del u
+    def generate(self, n_samples=1, u=None, genres=None, seed=None):
+        if seed == None:
+            torch.seed()
+        else:
+            torch.manual_seed(seed)
+        x = torch.randn(n_samples, self.input_size[0], self.input_size[1]) if u is None else torch.permute(u, (0, 2, 1))
         genres = self.oneHotEncoding(genres)
-        for layer in self.layers[::-1]:
-            x = layer.generate(n_samples, x, genres=genres)
+        self.eval()
+        with torch.no_grad():
+            for layer in self.layers[::-1]:
+                x = layer.generate(n_samples, x, genres=genres)
         x = torch.permute(x, (0, 2, 1))
         x = binarize_predictions(x, self.threshold)
         return x

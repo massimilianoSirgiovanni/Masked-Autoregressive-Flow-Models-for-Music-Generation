@@ -15,7 +15,7 @@ for i in seeds:
 
 
 
-choosedInstrument = 1
+choosedInstrument = 2
 
 choosedGenres = list(getDictGenre("./amg").keys())
 
