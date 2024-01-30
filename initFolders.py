@@ -21,4 +21,6 @@ if not exists(f"{current_directory}/savedObjects/models/LSTM"):
 directory_dataset = f"{current_directory}/savedObjects/datasets/2_bar"
 directory_models_RNN = f"{current_directory}/savedObjects/models/RNN"
 directory_models_LSTM = f"{current_directory}/savedObjects/models/LSTM"
-directory_models_MAF = f"{current_directory}/savedObjects/models/MAF"
+directory_models_MAF_Shared = f"{current_directory}/savedObjects/models/MAF/Shared"
+directory_models_MAF_DNDW = f"{current_directory}/savedObjects/models/MAF/DNDW"
+directory_models_MAF_Multivariate = f"{current_directory}/savedObjects/models/MAF/Multivariate"

@@ -1,10 +1,9 @@
-import torch
-
 from manageMIDI import *
 from colorama import Fore, Style
+from torch import Tensor, lerp
 
 
-def generateFromLatentSpace(model, latent_space, genre=torch.Tensor([0]), file_path="./output/song", instrument=0, seed=None):
+def generateFromLatentSpace(model, latent_space, genre=Tensor([0]), file_path="./output/song", instrument=0, seed=None):
     n_samples = latent_space.shape[0] if latent_space != None else 1
     output = model.generate(n_samples=n_samples, u=latent_space, genres=genre, seed=seed)
     end = n_samples
@@ -18,14 +17,14 @@ def generateFromLatentSpace(model, latent_space, genre=torch.Tensor([0]), file_p
     return output
 
 
-def latentSpaceInterpolation(model, first_song: tuple[torch.Tensor], second_song: tuple[torch.Tensor], interpolationFactor=0.5):
+def latentSpaceInterpolation(model, first_song: tuple[Tensor], second_song: tuple[Tensor], interpolationFactor=0.5):
     u, _ = model(first_song[0], genres=first_song[1])
     z, _ = model(second_song[0], genres=second_song[1])
-    return torch.lerp(z, u, interpolationFactor)
+    return lerp(z, u, interpolationFactor)
 
 
 
-def generateAndSaveASong(model, song=None, genres=torch.Tensor([0]), file_path="./output/song", instrument=0, seed=None):
+def generateAndSaveASong(model, song=None, genres=Tensor([0]), file_path="./output/song", instrument=0, seed=None):
     if song != None:
         genre = song[1]
         song = song[0]

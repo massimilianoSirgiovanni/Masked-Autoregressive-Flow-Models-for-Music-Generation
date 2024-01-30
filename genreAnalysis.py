@@ -1,10 +1,10 @@
 import os
 from colorama import Fore
 from manageFiles import *
-import torch
+from torch import unique, LongTensor
 
 def countGenresInTensor(tensor):
-    values, counts = torch.unique(tensor, return_counts=True)
+    values, counts = unique(tensor, return_counts=True)
     for value, count in zip(values, counts):
         print(f"Value: {value}, Frequency: {count}")
 
@@ -47,7 +47,7 @@ def getGenreFromId(file_name, dictGenre=None):
 
 def gennreLabelToTensor(list_genres, choosedGenres):
     genre_to_int = {label: idx for idx, label in enumerate(choosedGenres)}
-    genre_tensor = torch.LongTensor([genre_to_int[label] for label in list_genres])
+    genre_tensor = LongTensor([genre_to_int[label] for label in list_genres])
     return genre_tensor
 
 def convertGenreToNumber(genre, choosedGenres=list(getDictGenre("./amg").keys())):
@@ -66,4 +66,9 @@ def convertGenreToString(genre, choosedGenres=list(getDictGenre("./amg").keys())
         return choosedGenres[int(genre)]
     else:
         return genre
+
+def separateGenreToDataset(dataset):
+    data = dataset[:, :, :-1]
+    genres = dataset[:, 0, -1]
+    return data, genres
 

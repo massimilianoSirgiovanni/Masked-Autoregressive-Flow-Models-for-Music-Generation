@@ -1,24 +1,22 @@
-import colorama
-import torch
 from sklearn.metrics import precision_score, recall_score, f1_score
-from torch import norm
 from colorama import Fore, Style
-import genreAnalysis
+from genreAnalysis import convertGenreToNumber, convertGenreToString
+from torch import flatten, norm, sum, where, max, min, mean, unique, int8
 
 
 def precision_with_flatten(recon_x, x):
-    recon_x = torch.flatten(recon_x)
-    x = torch.flatten(x)
+    recon_x = flatten(recon_x)
+    x = flatten(x)
     return precision_score(x, recon_x)
 
 def recall_with_flatten(recon_x, x):
-    recon_x = torch.flatten(recon_x)
-    x = torch.flatten(x)
+    recon_x = flatten(recon_x)
+    x = flatten(x)
     return recall_score(x, recon_x)
 
 def f1_score_with_flatten(recon_x, x):
-    recon_x = torch.flatten(recon_x)
-    x = torch.flatten(x)
+    recon_x = flatten(recon_x)
+    x = flatten(x)
     return f1_score(x, recon_x)
 
 def two_norm(recon_x, x):
@@ -29,37 +27,34 @@ def two_norm(recon_x, x):
 ###################### Metrics for evaluating songs ########################
 
 def holdStatePerSong(piano_roll):
-    return torch.sum(piano_roll[:, :, -2])/piano_roll.shape[0]
+    return sum(piano_roll[:, :, -1])/piano_roll.shape[0]
 
 def silentStatePerSong(piano_roll):
-    return torch.sum(piano_roll[:, :, -1])/piano_roll.shape[0]
+    return where(sum(piano_roll, dim=2)==0)[0].shape[0]/piano_roll.shape[0]
 
 def playedNotesPerSong(piano_roll):
-    return torch.sum(piano_roll[:, :, :-2])/piano_roll.shape[0]
+    return sum(piano_roll[:, :, :-1])/piano_roll.shape[0]
 
 def highestPitch(piano_roll):
-    index = torch.where(piano_roll[:, :, :-3] == 1)
-    zero = torch.zeros_like(piano_roll[:, :, :-3]).float()
-    zero[index[0], index[1], index[2]] = index[2].float()
-    max = torch.max(torch.max(zero, dim=2).values, dim=1).values
-    return torch.mean(max)
+    piano_roll = piano_roll[:, :, :-1].float()
+    index = where(piano_roll == 1)
+    piano_roll[index[0], index[1], index[2]] = index[2].to(int8).float()
+    return mean(max(max(piano_roll.float(), dim=2).values, dim=1).values)
 
 def lowestPitch(piano_roll):
-    index = torch.where(piano_roll[:, :, :-3] == 1)
-    zero = torch.zeros_like(piano_roll[:, :, :-3]).float()
-    zero[:, :, :] = 128
-    zero[index[0], index[1], index[2]] = index[2].float()
-    min = torch.min(torch.min(zero, dim=2).values, dim=1).values
-    return torch.mean(min)
+    piano_roll = piano_roll[:, :, :-1].float()
+    index = where(piano_roll == 1)
+    piano_roll[:, :, :] = 128
+    piano_roll[index[0], index[1], index[2]] = index[2].float()
+    return mean(min(min(piano_roll, dim=2).values, dim=1).values)
 
 def averagePitch(piano_roll):
-    index = torch.where(piano_roll[:, :, :-3] == 1)
-    zero = torch.zeros_like(piano_roll[:, :, :-3]).float()
-    zero[index[0], index[1], index[2]] = index[2].float()
-    sum = torch.sum(zero, dim=(1, 2))
-    element_unique, count = torch.unique(index[0], return_counts=True)
-    avaragePitchPerSong = sum[element_unique]/count
-    return torch.mean(avaragePitchPerSong)
+    piano_roll = piano_roll[:, :, :-1]
+    index = where(piano_roll == 1)
+    piano_roll[index[0], index[1], index[2]] = index[2].to(int8)
+    piano_roll = sum(piano_roll, dim=(1, 2))
+    element_unique, count = unique(index[0], return_counts=True)
+    return mean(piano_roll[element_unique]/count)
 
 def completeAnalisysOnSongsSets(piano_roll, stringGenre=""):
     print("\n" + "-"*8 + f"{Fore.MAGENTA}COMPLETE ANALYSIS ON A SET OF {Fore.LIGHTGREEN_EX}{stringGenre} {Fore.MAGENTA}TRACKS{Style.RESET_ALL}" + "-"*8)
@@ -74,11 +69,11 @@ def completeAnalisysOnSongsSets(piano_roll, stringGenre=""):
 
 
 def completeAnalisysOnSingleGenre(piano_roll, piano_roll_y, genre):
-    genre = genreAnalysis.convertGenreToNumber(genre)
+    genre = convertGenreToNumber(genre)
     mask_genre = piano_roll_y == genre
     piano_roll = piano_roll[mask_genre]
-    completeAnalisysOnSongsSets(piano_roll, stringGenre=f"{genreAnalysis.convertGenreToString(genre)} ")
+    completeAnalisysOnSongsSets(piano_roll, stringGenre=f"{convertGenreToString(genre)} ")
 
 def notes_frequency(piano_roll):
-    frequency = torch.sum(piano_roll, dim=(0, 1))/(piano_roll.shape[0]*piano_roll.shape[1])
+    frequency = sum(piano_roll, dim=(0, 1))/(piano_roll.shape[0]*piano_roll.shape[1])
     return frequency

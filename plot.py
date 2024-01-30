@@ -1,21 +1,19 @@
-import numpy
-import numpy as np
+from numpy.random import choice
 import matplotlib.pyplot as plt
-import torch
 from sklearn.decomposition import PCA
 from config import choosedGenres
 from genreAnalysis import convertGenreToNumber
-import pypianoroll
+from torch import manual_seed, logical_or
 
 def plotPairwiseGenres(X, Y, first_genre, second_genre=None, max_samples=None, seed=None):
     first_genre = convertGenreToNumber(first_genre)
     if seed != None:
-        torch.manual_seed(seed)
+        manual_seed(seed)
     if second_genre != None:
         second_genre = convertGenreToNumber(second_genre)
         first_genre_mask = Y == first_genre
         second_genre_mask = Y == second_genre
-        andMask = torch.logical_or(first_genre_mask, second_genre_mask)
+        andMask = logical_or(first_genre_mask, second_genre_mask)
         Y = Y[andMask]
         X = X[andMask]
         second_genre_name = choosedGenres[second_genre]
@@ -41,7 +39,7 @@ def plotPairwiseGenres(X, Y, first_genre, second_genre=None, max_samples=None, s
     plt.show()
 
 def chooseRandomElement(tensor, conditon, n_sample):
-    selected_indices = np.random.choice(tensor.shape[0], n_sample, replace=False)
+    selected_indices = choice(tensor.shape[0], n_sample, replace=False)
     return tensor[selected_indices], conditon[selected_indices]
 
 def noteFrequencyHinstogram(frequency_distribution):
@@ -63,4 +61,37 @@ def plot_piano_roll(piano_roll, cmap='Blues', file_path=None):
     plt.colorbar(label='Note Pressure')
     if file_path != None:
         plt.savefig(file_path)
+    plt.show()
+
+def plot_loss(model, file_path=None):
+    if len( model.valLossList) == 0 or len( model.trLossList) == 0:
+        print(f"The Model must be trained first!")
+        return -1
+    plt.plot( model.trLossList, 'g-', label="training")
+    plt.plot( model.valLossList, 'r--', label="validation")
+    if  model.bestEpoch != None:
+        ymax = max(max( model.trLossList), max(model.valLossList))
+        ymin = min(min( model.trLossList), min(model.valLossList))
+        plt.vlines(x= model.bestEpoch, ymin=ymin, ymax=ymax, colors='tab:gray', linestyles='dashdot')
+    plt.title(f"{type}Loss set through the epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel(f"{type}Loss")
+    if file_path != None:
+        plt.savefig(file_path)
+    plt.draw()
+    plt.show()
+
+def plot_accuracy(model, file_path=None):
+    plt.plot(model.accuracy)
+    if model.bestEpoch != None:
+        ymax = 1#max(model.accuracy)
+        ymin = 0#min(model.accuracy)
+        plt.vlines(x=model.bestEpoch, ymin=ymin, ymax=ymax, colors='tab:gray', linestyles='dashdot')
+    plt.title(f"Training Accuracy set through the epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel(f"Accuracy")
+
+    if file_path != None:
+        plt.savefig(file_path)
+    plt.draw()
     plt.show()

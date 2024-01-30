@@ -1,58 +1,61 @@
-import itertools
-from vaeModel import *
+from itertools import product
 from train import *
-import os
-from initFolders import directory_models_RNN
+from os import remove, listdir
+from torch import manual_seed
 
-def modelSelection(tr_set, val_set, model, loss_function=loss_function_VAE, num_epochs=100, patience=20, directory_models=directory_models_RNN):
+def modelSelectionMAF(tr_set, val_set, classModel, madeType='shared', num_epochs=100, patience=20, directory_models="./savedObjects/models"):
 
 
     print(f"\n---------------{Fore.BLUE}START MODEL SELECTION{Style.RESET_ALL}-------------------")
-    input_size = tr_set.shape[2]
 
     for i in seeds:
         index = 0
-        torch.manual_seed(i)
+        manual_seed(i)
         print(f"MODEL SELECTION WITH SEED={i}")
-        for params in itertools.product(latent_size_values, hidden_size_values, learning_rate_values, batch_size_values, num_layer_values, beta_values):
-            print(f"{Fore.GREEN}Model Selection on Model {index} with parameters: {params} and seed={i}{Style.RESET_ALL}")
-            latent_size, hidden_size, learning_rate, batch_size, num_layers, beta = params
+        if madeType == 'shared':
+            hidden_sizes_values = hidden_sizes_shared
+        elif madeType == 'dndw':
+            hidden_sizes_values = hidden_sizes_dndw
+        elif madeType == 'multivariate':
+            hidden_sizes_values = hidden_sizes_multivariate
+        for params in product(hidden_sizes_values, num_layers_values, batch_size_values, learning_rate_values):
+            print(f"{Fore.GREEN}Model Selection on Model {index} (madeType = {madeType}) with parameters: {params} and seed={i}{Style.RESET_ALL}")
+            hidden_sizes, num_layers, batch_size, learning_rate = params
             if exists(directory_models + f"/Seed={i}" + f"/{params}"):
                 print("Already trained model: " + f"/Seed={i}" + f"/{params}")
-                trainObj = loadVariableFromFile(directory_models + f"/Seed={i}" + f"/{params}")
+                trainObj = loadModel(directory_models + f"/Seed={i}" + f"/{params}", device=choosedDevice)
                 print(trainObj)
             else:
                 if exists(directory_models + f"/Seed={i}" + f"/{params}_tmp"):
-                    trainObj = loadVariableFromFile(directory_models + f"/Seed={i}" + f"/{params}_tmp")
+                    trainObj = loadModel(directory_models + f"/Seed={i}" + f"/{params}_tmp", device=choosedDevice)
                 else:
-                    modelToTrain = model.parametersInitialization(input_dim=input_size, hidden_dim=hidden_size, latent_dim=latent_size, num_layers=num_layers)
-                    trainObj = trainingModel(modelToTrain)
-                trainObj.trainModel(tr_set, val_set, batch_size=batch_size, loss_function=loss_function, num_epochs=num_epochs, patience=patience, learning_rate=learning_rate, beta=beta, saveModel=True, file_path=directory_models + f"/Seed={i}" + f"/{params}_tmp")
-                saveVariableInFile(directory_models + f"/Seed={i}" + f"/{params}", trainObj)
-                os.remove(directory_models + f"/Seed={i}" + f"/{params}_tmp")
+                    model = classModel()
+                    model.parametersInitialization((tr_set.tensors[0].shape[2], tr_set.tensors[0].shape[1]), hidden_sizes=hidden_sizes, madeType=madeType, n_layers=num_layers, num_genres=len(choosedGenres))
+                    trainObj = trainingModel(model).to(choosedDevice)
+                trainObj.trainModel(tr_set, val_set, batch_size=batch_size, num_epochs=num_epochs, patience=patience, learning_rate=learning_rate, file_path=directory_models + f"/Seed={i}" + f"/{params}_tmp")
+                saveModel(trainObj, directory_models + f"/Seed={i}" + f"/{params}")
+                remove(directory_models + f"/Seed={i}" + f"/{params}_tmp")
 
             index += 1
 
 
-    bestModelLoss, bestModelRecon = returnBestModels(directory_models, seeds)
+    bestModel = returnBestModels(directory_models, seeds)
 
-    return bestModelLoss, bestModelRecon
+    return bestModel
 
 def returnBestModels(directory, seeds):
     dictionaryModels = {}
     print(directory)
     for i in seeds:
         print(i)
-        for filenames in os.listdir(directory + f"/Seed={i}"):
+        for filenames in listdir(directory + f"/Seed={i}"):
             print(filenames)
             model = loadVariableFromFile(directory + f"/Seed={i}/" + filenames)
             if filenames in dictionaryModels:
-                dictionaryModels[filenames][0] += model.bestValLoss
-                dictionaryModels[filenames][1] += model.valReconList[model.bestEpoch]
+                dictionaryModels[filenames] += model.bestValLoss
             else:
-                dictionaryModels[filenames] = (model.bestValLoss, model.valReconList[model.bestEpoch])
+                dictionaryModels[filenames] = model.bestValLoss
             print(dictionaryModels[filenames])
     bestLossModel  = min(dictionaryModels.items(), key=lambda tup: tup[1][0] / len(seeds))
-    bestReconModel = min(dictionaryModels.items(), key=lambda tup: tup[1][1] / len(seeds))
 
-    return bestLossModel, bestReconModel
+    return bestLossModel
