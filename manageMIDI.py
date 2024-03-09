@@ -46,9 +46,7 @@ def midi_to_piano_roll(midi_data, number_notes=128, instruments=default_instrume
                 note_number = note.pitch
                 piano_roll[start_time, note_number] = 1
                 for i in range(start_time+1, end_time):
-                    piano_roll[i, number_notes-1] = 1
-                    #print("Hold state")
-            #piano_roll[:, -1] = torch.sum(piano_roll, dim=1) == 0   #Silent State
+                    piano_roll[i, number_notes-1] = 1   # Hold state
             if program in piano_roll_dict:
                 piano_roll_dict[program] = cat((piano_roll_dict[program], piano_roll), dim=0)
             else:
@@ -207,7 +205,6 @@ def removeDuplicatesNoConsideringGenres(dataset, genres):
 
 def getSingleInstrumentDatabaseLMD(directory, instrument):
     dataset = None
-    genre = None
     if exists(f"{directory}/dataset_complete_program={instrument}"):
         dataset = loadVariableFromFile(f"{directory}/dataset_complete_program={instrument}").to_dense()
     else:
@@ -241,8 +238,5 @@ def getSingleInstrumentDatabaseLMD(directory, instrument):
 
 
 
-def binarize_predictions(predictions, threshold=0.5):
-    # Apply the threshold to a tensor to obtain a binary result
-    binary_predictions = (predictions > threshold).to(int8)
-    return binary_predictions
+
 

@@ -52,7 +52,7 @@ def noteFrequencyHinstogram(frequency_distribution):
 def plot_piano_roll(piano_roll, cmap='Blues', file_path=None):
     if len(piano_roll.shape) > 2:
         print(f"Warining! This function can plot only one piano roll at a time, so only the first one will be plotted")
-        piano_roll = piano_roll[0]
+        piano_roll = piano_roll[0].to('cpu')
     plt.imshow(piano_roll.numpy().T, aspect='auto', cmap=cmap, origin='lower', interpolation='none')
     plt.grid(True, linestyle='--', alpha=0.5, which='both', axis='both')
     plt.xlabel('Time (beat)')
@@ -60,18 +60,18 @@ def plot_piano_roll(piano_roll, cmap='Blues', file_path=None):
     plt.title('Piano Roll')
     plt.colorbar(label='Note Pressure')
     if file_path != None:
-        plt.savefig(file_path)
+        plt.savefig(file_path + '.png')
     plt.show()
 
 def plot_loss(model, file_path=None):
     if len( model.valLossList) == 0 or len( model.trLossList) == 0:
         print(f"The Model must be trained first!")
         return -1
-    plt.plot( model.trLossList, 'g-', label="training")
-    plt.plot( model.valLossList, 'r--', label="validation")
+    plt.plot(model.trLossList, 'g-', label="training")
+    plt.plot(model.valLossList, 'r--', label="validation")
     if  model.bestEpoch != None:
-        ymax = max(max( model.trLossList), max(model.valLossList))
-        ymin = min(min( model.trLossList), min(model.valLossList))
+        ymax = max(model.trLossList) #max(max(model.trLossList), max(model.valLossList))
+        ymin = min(model.trLossList) #min(min(model.trLossList), min(model.valLossList))
         plt.vlines(x= model.bestEpoch, ymin=ymin, ymax=ymax, colors='tab:gray', linestyles='dashdot')
     plt.title(f"{type}Loss set through the epochs")
     plt.xlabel("Epochs")

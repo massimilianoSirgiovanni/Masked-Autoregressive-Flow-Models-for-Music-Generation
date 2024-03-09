@@ -1,5 +1,5 @@
 from torch.nn import Module, Parameter, init
-from torch import tensor, Tensor, randn, einsum, matmul
+from torch import tensor, Tensor, randn, einsum
 from math import sqrt
 from config import choosedDevice
 
@@ -52,7 +52,7 @@ class MaskedLinearDifferentNotesDifferentWeights(MaskedLinear):
         self.num_genres = num_genres
         self.weight = Parameter(Tensor(self.num_genres, self.output_size, self.notes_size, self.timestep_size).to(choosedDevice))
         if bias:
-            self.bias = Parameter(randn(self.output_size).to(choosedDevice))
+            self.bias = Parameter(randn(self.notes_size, self.output_size).to(choosedDevice))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -94,3 +94,5 @@ class MaskedLinearMultivariate(MaskedLinear):
             return einsum("bnt, bdont -> bdo", x.float(), maskedWeight) + self.bias
         else:
             return einsum("bnt, bdont -> bdo", x.float(), maskedWeight)
+
+

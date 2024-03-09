@@ -5,18 +5,18 @@ from torch import flatten, norm, sum, where, max, min, mean, unique, int8
 
 
 def precision_with_flatten(recon_x, x):
-    recon_x = flatten(recon_x)
-    x = flatten(x)
+    recon_x = flatten(recon_x).to(device="cpu")
+    x = flatten(x).to(device="cpu")
     return precision_score(x, recon_x)
 
 def recall_with_flatten(recon_x, x):
-    recon_x = flatten(recon_x)
-    x = flatten(x)
+    recon_x = flatten(recon_x).to(device="cpu")
+    x = flatten(x).to(device="cpu")
     return recall_score(x, recon_x)
 
 def f1_score_with_flatten(recon_x, x):
-    recon_x = flatten(recon_x)
-    x = flatten(x)
+    recon_x = flatten(recon_x).to(device="cpu")
+    x = flatten(x).to(device="cpu")
     return f1_score(x, recon_x)
 
 def two_norm(recon_x, x):
@@ -38,15 +38,18 @@ def playedNotesPerSong(piano_roll):
 def highestPitch(piano_roll):
     piano_roll = piano_roll[:, :, :-1].float()
     index = where(piano_roll == 1)
-    piano_roll[index[0], index[1], index[2]] = index[2].to(int8).float()
-    return mean(max(max(piano_roll.float(), dim=2).values, dim=1).values)
+    piano_roll[:, :, :] = -1
+    piano_roll[index[0], index[1], index[2]] = index[2].float()
+    maximum = max(max(piano_roll, dim=1).values, dim=1).values
+    return mean(maximum[maximum != -1])
 
 def lowestPitch(piano_roll):
     piano_roll = piano_roll[:, :, :-1].float()
     index = where(piano_roll == 1)
     piano_roll[:, :, :] = 128
     piano_roll[index[0], index[1], index[2]] = index[2].float()
-    return mean(min(min(piano_roll, dim=2).values, dim=1).values)
+    minimum = min(min(piano_roll, dim=1).values, dim=1).values
+    return mean(minimum[minimum != 128])
 
 def averagePitch(piano_roll):
     piano_roll = piano_roll[:, :, :-1]
@@ -56,16 +59,25 @@ def averagePitch(piano_roll):
     element_unique, count = unique(index[0], return_counts=True)
     return mean(piano_roll[element_unique]/count)
 
+def poliphonicNotes(piano_roll):
+    n = piano_roll.shape[0]
+    piano_roll = sum(piano_roll[:, :, :-1], dim=2)
+    boolean_mask = piano_roll > 1
+    piano_roll = piano_roll[boolean_mask]
+    return piano_roll.shape[0]/n
+
+
 def completeAnalisysOnSongsSets(piano_roll, stringGenre=""):
     print("\n" + "-"*8 + f"{Fore.MAGENTA}COMPLETE ANALYSIS ON A SET OF {Fore.LIGHTGREEN_EX}{stringGenre} {Fore.MAGENTA}TRACKS{Style.RESET_ALL}" + "-"*8)
     print(f"Number of tracks: {Fore.LIGHTGREEN_EX}{piano_roll.shape[0]}{Style.RESET_ALL}")
     print(f"Bars per track: {Fore.LIGHTGREEN_EX}{piano_roll.shape[1]/16}{Style.RESET_ALL} bars\n")
     print(f"Number of held notes: {Fore.LIGHTGREEN_EX}{holdStatePerSong(piano_roll):.4f}{Style.RESET_ALL}")
-    print(f"Number of silent notes: {Fore.LIGHTGREEN_EX}{silentStatePerSong(piano_roll):.4f}{Style.RESET_ALL}")
+    print(f"Number of silent time steps: {Fore.LIGHTGREEN_EX}{silentStatePerSong(piano_roll):.4f}{Style.RESET_ALL}")
     print(f"Number of played notes: {Fore.LIGHTGREEN_EX}{playedNotesPerSong(piano_roll):.4f}{Style.RESET_ALL}")
     print(f"Highest pitch of played notes: {Fore.LIGHTGREEN_EX}{highestPitch(piano_roll):.4f}{Style.RESET_ALL}")
     print(f"Lowest pitch of played notes: {Fore.LIGHTGREEN_EX}{lowestPitch(piano_roll):.4f}{Style.RESET_ALL}")
     print(f"Mean pitch of played notes: {Fore.LIGHTGREEN_EX}{averagePitch(piano_roll):.4f}{Style.RESET_ALL}")
+    print(f"Number of polyphonic time steps: {Fore.LIGHTGREEN_EX}{poliphonicNotes(piano_roll):.4f}{Style.RESET_ALL}")
 
 
 def completeAnalisysOnSingleGenre(piano_roll, piano_roll_y, genre):

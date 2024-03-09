@@ -18,6 +18,15 @@ if not exists(f"{current_directory}/savedObjects/models/RNN"):
 if not exists(f"{current_directory}/savedObjects/models/LSTM"):
     makedirs(f"{current_directory}/savedObjects/models/LSTM")
 
+if not exists(f"{current_directory}/output"):
+    makedirs(f"{current_directory}/output")
+
+if not exists(f"{current_directory}/output/LSI"):
+    makedirs(f"{current_directory}/output/LSI")
+
+if not exists(f"{current_directory}/output/Conditioning"):
+    makedirs(f"{current_directory}/output/Conditioning")
+
 directory_dataset = f"{current_directory}/savedObjects/datasets/2_bar"
 directory_models_RNN = f"{current_directory}/savedObjects/models/RNN"
 directory_models_LSTM = f"{current_directory}/savedObjects/models/LSTM"

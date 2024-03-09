@@ -1,11 +1,13 @@
 from madeModel import MADEMultivariate, MADESharedWeights, MADEDifferentNotesDifferentWeights
 from typing import List
-from manageMIDI import binarize_predictions
+from generationFunct import binarize_predictions
 from config import choosedDevice
 from torch.nn import Module, ModuleList
 from colorama import Fore, Style
-from torch import sum, exp, eye, permute, zeros, mean, seed, manual_seed, randn, no_grad, Tensor
+from torch import seed as random_seed
+from torch import sum, exp, eye, permute, zeros, mean, manual_seed, randn, no_grad, Tensor
 from numpy import pi, log
+from manageMemory import cleanCache
 
 
 
@@ -61,7 +63,7 @@ class MAF(Module):
 
 
     def oneHotEncoding(self, genres):
-        if (self.num_genres > 0 and genres is not None) or len(genres.shape) < 2:
+        if self.num_genres > 0 and len(genres.shape) < 2 and genres is not None:
             genres = eye(self.num_genres)[genres.tolist()]
             if len(genres.shape) == 1:
                 genres = genres.unsqueeze(0)
@@ -74,6 +76,7 @@ class MAF(Module):
         for layer in self.layers:
             u, log_det = layer(u, genres)
             log_det_sum += log_det
+            cleanCache()
         u = permute(u, (0, 2, 1))
         return u, self.negativeLogLikelihood(u, log_det_sum)
 
@@ -85,16 +88,13 @@ class MAF(Module):
         return negloglik_loss
 
 
-    def generate(self, n_samples=1, u=None, genres=Tensor([0]), choosedSeed=None):
-        if choosedSeed == None:
-            seed()
+    def generate(self, n_samples=1, u=None, genres=Tensor([0]), seed=None):
+        if seed == None:
+            random_seed()
         else:
-            manual_seed(choosedSeed)
+            manual_seed(seed)
         x = randn(n_samples, self.input_size[0], self.input_size[1]).to(choosedDevice) if u is None else permute(u, (0, 2, 1))
-        if genres.shape[0] == 1:
-            genres = self.oneHotEncoding(genres).to(choosedDevice)
-        elif len(genres.shape) == 1:
-            genres = genres.unsqueeze(0)
+        genres = self.oneHotEncoding(genres).to(choosedDevice)
         self.eval()
         with no_grad():
             for layer in self.layers[::-1]:

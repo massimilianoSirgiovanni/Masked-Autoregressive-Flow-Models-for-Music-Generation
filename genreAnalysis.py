@@ -3,10 +3,14 @@ from colorama import Fore
 from manageFiles import *
 from torch import unique, LongTensor
 
-def countGenresInTensor(tensor):
+def countGenresInTensor(tensor, percentage=False):
+    n = tensor.shape[0]
     values, counts = unique(tensor, return_counts=True)
     for value, count in zip(values, counts):
-        print(f"Value: {value}, Frequency: {count}")
+        if percentage == False:
+            print(f"Value: {value}, Frequency: {count}")
+        else:
+            print(f"Value: {value}, Frequency: {(count/n*100):.2f}%")
 
 def extractGenre(file_name):
     return file_name.lower()[8:-4]

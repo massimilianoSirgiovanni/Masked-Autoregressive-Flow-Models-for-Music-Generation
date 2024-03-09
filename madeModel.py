@@ -5,6 +5,7 @@ from colorama import Fore, Style
 from config import choosedDevice
 from torch.nn import Module, ModuleList, Sigmoid, ReLU
 from torch import zeros, randn, no_grad, exp, minimum, tensor
+from manageMemory import cleanCache
 
 
 class MADE(Module):
@@ -24,7 +25,9 @@ class MADE(Module):
     def forward(self, x, genres):
         for layer in self.layers:
             x = layer(x, genres)
+            cleanCache()
         mu = self.mu_layer(x, genres)
+        cleanCache()
         logp = self.logp_layer(x, genres)
         return mu, logp
 

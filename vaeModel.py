@@ -132,9 +132,9 @@ class VAE(Module):
         return string
 
 
-# Funzione di perdita (Loss)
+# Loss Function
 def loss_function_VAE(output, x, beta=0.1):
-    recon_x, mu, logvar, h_enc, h_dec = output
+    recon_x, mu, logvar = output
     bce_loss = binary_cross_entropy_with_logits(recon_x, x, reduction='none')
     BCE = sum(bce_loss, dim=2).mean()
     var = logvar.exp()

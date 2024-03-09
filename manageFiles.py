@@ -29,4 +29,4 @@ def loadVariableFromFile(file_path):
 
 def saveMIDI(midi_file, file_path):
     midi_file.write(file_path)
-    print("MIDI Successfully Saved on: \"{file_path}\"")
+    print(f"MIDI Successfully Saved on: \"{file_path}\"")

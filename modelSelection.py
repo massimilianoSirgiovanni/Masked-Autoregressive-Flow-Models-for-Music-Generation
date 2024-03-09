@@ -22,40 +22,34 @@ def modelSelectionMAF(tr_set, val_set, classModel, madeType='shared', num_epochs
             print(f"{Fore.GREEN}Model Selection on Model {index} (madeType = {madeType}) with parameters: {params} and seed={i}{Style.RESET_ALL}")
             hidden_sizes, num_layers, batch_size, learning_rate = params
             if exists(directory_models + f"/Seed={i}" + f"/{params}"):
-                print("Already trained model: " + f"/Seed={i}" + f"/{params}")
                 trainObj = loadModel(directory_models + f"/Seed={i}" + f"/{params}", device=choosedDevice)
                 print(trainObj)
             else:
-                if exists(directory_models + f"/Seed={i}" + f"/{params}_tmp"):
-                    trainObj = loadModel(directory_models + f"/Seed={i}" + f"/{params}_tmp", device=choosedDevice)
-                else:
-                    model = classModel()
-                    model.parametersInitialization((tr_set.tensors[0].shape[2], tr_set.tensors[0].shape[1]), hidden_sizes=hidden_sizes, madeType=madeType, n_layers=num_layers, num_genres=len(choosedGenres))
-                    trainObj = trainingModel(model).to(choosedDevice)
-                trainObj.trainModel(tr_set, val_set, batch_size=batch_size, num_epochs=num_epochs, patience=patience, learning_rate=learning_rate, file_path=directory_models + f"/Seed={i}" + f"/{params}_tmp")
-                saveModel(trainObj, directory_models + f"/Seed={i}" + f"/{params}")
-                remove(directory_models + f"/Seed={i}" + f"/{params}_tmp")
+                model = classModel()
+                model.parametersInitialization((tr_set.tensors[0].shape[2], tr_set.tensors[0].shape[1]), hidden_sizes=hidden_sizes, madeType=madeType, n_layers=num_layers, num_genres=len(choosedGenres))
+                trainObj = trainingModel(model).to(choosedDevice)
+            trainObj.trainModel(tr_set, val_set, batch_size=batch_size, num_epochs=num_epochs, patience=patience, learning_rate=learning_rate, file_path=directory_models + f"/Seed={i}" + f"/{params}")
+            saveModel(trainObj, directory_models + f"/Seed={i}" + f"/{params}")
 
             index += 1
 
 
-    bestModel = returnBestModels(directory_models, seeds)
+    bestModel_label = returnBestModels(directory_models, seeds)
+    choosedModel = loadModel(directory_models + f"/Seed={seeds[0]}" + f"/{bestModel_label}", device=choosedDevice)
+    saveVariableInFile(directory_models + f"/bestModel_label_{madeType}", bestModel_label)
 
-    return bestModel
+    return choosedModel, bestModel_label
 
 def returnBestModels(directory, seeds):
     dictionaryModels = {}
-    print(directory)
     for i in seeds:
-        print(i)
         for filenames in listdir(directory + f"/Seed={i}"):
-            print(filenames)
-            model = loadVariableFromFile(directory + f"/Seed={i}/" + filenames)
+            model = loadModel(directory + f"/Seed={i}/" + filenames, device=choosedDevice)
             if filenames in dictionaryModels:
                 dictionaryModels[filenames] += model.bestValLoss
             else:
                 dictionaryModels[filenames] = model.bestValLoss
-            print(dictionaryModels[filenames])
-    bestLossModel  = min(dictionaryModels.items(), key=lambda tup: tup[1][0] / len(seeds))
-
+    bestLossModel = min(dictionaryModels, key=lambda k: dictionaryModels[k].item()/len(seeds))
+    bestLoss = dictionaryModels[bestLossModel]
+    print(f"The Best Model is: {bestLossModel}, with loss={bestLoss}")
     return bestLossModel

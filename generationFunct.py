@@ -38,3 +38,8 @@ def generateAndSaveASong(model, song=None, genres=Tensor([0]), file_path="./outp
         print(song)
     return generateFromLatentSpace(model, song, genres, file_path, instrument, seed=seed)
 
+def binarize_predictions(predictions, threshold=0.5):
+    # Apply the threshold to a tensor to obtain a binary result
+    binary_predictions = (predictions > threshold).to(int8)
+    return binary_predictions
+
