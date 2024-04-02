@@ -13,13 +13,16 @@ The core of the thesis focuses on exploring the realm of Flow Based Models, aimi
 - MAF Multivariate.
 
 In **MAF Univariate Shared**, the univariate sequences related to each note are processed by the same MAF model, thus sharing its parameters.
-<img src=>
+
+<img src=images/Shared.PNG>
 
 In **MAF Univariate DNDW**, each sequence associated with a different note is processed by a different MAF with its own parameters.
-<img src=>
+
+<img src=images/DNDW.PNG>
 
 In **MAF Multivariate**, where tracks are considered as multivariate sequences. With this approach, it is possible to capture relationships between different notes in different time steps.
-<img src=>
+
+<img src=images/Multivariate.PNG>
 
 <hr>
 The work is divided into a series of files:
