@@ -12,7 +12,13 @@ The core of the thesis focuses on exploring the realm of Flow Based Models, aimi
 - MAF Univariate DNDW;
 - MAF Multivariate.
 
-In MAF Univariate Shared, the univariate sequences related to each note are processed by the same MAF model, thus sharing its parameters.
+In **MAF Univariate Shared**, the univariate sequences related to each note are processed by the same MAF model, thus sharing its parameters.
+<img src=>
+
+In **MAF Univariate DNDW**, each sequence associated with a different note is processed by a different MAF with its own parameters.
+<img src=>
+
+In **MAF Multivariate**, where tracks are considered as multivariate sequences. With this approach, it is possible to capture relationships between different notes in different time steps.
 <img src=>
 
 <hr>
@@ -36,15 +42,3 @@ The work is divided into a series of files:
 - vaeModel --> contains the class for defining a simple VAE model;
 
 **ATTENTION**: To be able to carry out the example developed for the thesis it is necessary to unzip the file --> ./savedObjects/dataset/2_bar/dataset_complete_program=0.zip
-
-Summary of the work done:
-
-
-In the first case,. In the second case, each sequence associated with a different note is processed by a different MAF with its own parameters.
-
-Lastly, the last approach designed is the Multivariate MAF, where tracks are considered as multivariate sequences. With this approach, it is possible to capture relationships between different notes in different time steps.
-
-In parallel with the theoretical treatment, the thesis approach is based on practical tests and experiments, offering a tangible experience of the impact of such models on music generation.
-Through the analysis of the results obtained during the research journey, the effectiveness and relevance of applying these models to music emerge. The conducted experiments demonstrate good accuracy and the ability to generate pleasant and original melodies, highlighting the innovative potential of this interdisciplinary convergence.
-
-Finally, the thesis proposes future avenues for deepening and expanding the work done, suggesting ways to further explore the potential of these models and test more complex configurations.
