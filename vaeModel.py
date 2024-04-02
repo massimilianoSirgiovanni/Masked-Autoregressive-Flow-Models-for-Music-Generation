@@ -48,9 +48,6 @@ class Decoder(Module):
 
 
     def forward(self, z, h_0, seq_len):
-        '''hidden = self.fc_hidden(z).unsqueeze(0)
-        cell = self.fc_cell(z).unsqueeze(0)
-        h_n = (hidden.contiguous(), cell.contiguous())'''
         z = z.unsqueeze(1).repeat(1, seq_len, 1)
         z = z.view(z.shape[0], seq_len, self.latent_dim).to(self.device)
         output, _ = self.net(z, h_0)
@@ -68,7 +65,6 @@ class InitialHiddenGenerator(Module):
         self.layers = []
         for i in range(0, num_layers):
             self.layers.append(Linear(z_size, hidden_size, bias=bias))
-        #self.relu = nn.ReLU()
 
     def forward(self, z):
         # Passa z attraverso il layer lineare per generare l'hidden state iniziale
@@ -76,7 +72,6 @@ class InitialHiddenGenerator(Module):
         for i in range(1, self.num_layer):
             tmp = self.layers[i](z.unsqueeze(0))
             hidden = cat((hidden, tmp), dim=0)
-        #hidden = self.relu(hidden)
         return hidden
 
 # Definizione del modello VAE

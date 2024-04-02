@@ -1,6 +1,6 @@
 from itertools import product
 from train import *
-from os import remove, listdir
+from os import listdir
 from torch import manual_seed
 
 def modelSelectionMAF(tr_set, val_set, classModel, madeType='shared', num_epochs=100, patience=20, directory_models="./savedObjects/models"):

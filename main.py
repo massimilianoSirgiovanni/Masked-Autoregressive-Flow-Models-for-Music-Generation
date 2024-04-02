@@ -1,6 +1,7 @@
 from sys import exit
 
 import numpy.random
+import torch
 
 import accuracyMetrics
 from initFolders import *
@@ -11,6 +12,7 @@ from config import *
 from generationFunct import *
 from torch import cuda, manual_seed, randint, tensor, multinomial
 import plot
+import random
 
 
 
@@ -46,8 +48,8 @@ else:
     print("CUDA not available on this system.")
 
 print(f"Device: {choosedDevice}")
-print(f"program {choosedInstrument}")
-print(choosedGenres)
+print(f"MIDI Program: {choosedInstrument}")
+print(f"Genres: {choosedGenres}")
 print("--------------------Starting Execution---------------------")
 print(f"{Fore.YELLOW}Seed = {seeds[0]}{Style.RESET_ALL}\n")
 
@@ -219,7 +221,7 @@ if value == "4" or value=='5':
     elif value == '5' or value=='7':
         print(5 * '-' + "Evaluate Conditioning on 1000 sample" + 5 * '-')
         for genre in range(0, len(choosedGenres)):
-            #accuracyMetrics.completeAnalisysOnSingleGenre(tr_set.tensors[0], tr_set.tensors[1], genres)
+            accuracyMetrics.completeAnalisysOnSingleGenre(tr_set.tensors[0], tr_set.tensors[1], genres)
             n = 1000
             genres = Tensor([genre])
             genres = genres.repeat(n)

@@ -132,19 +132,6 @@ class trainingModel(Module):
 
         return accuracy
 
-    '''def predict(self, test=None, seq_len=32):
-        self.bestModel.eval()
-        with torch.no_grad():
-            if test == None:
-                latent_sample = torch.randn(1, self.bestModel.encoder.latent_dim)
-                prediction = self.bestModel.decode(latent_sample, seq_len)
-                binary_output = binarize_predictions(torch.sigmoid(prediction), threshold=0.5)
-            else:
-                prediction = self.bestModel(test)
-                binary_output = binarize_predictions(prediction[0], threshold=0.2)
-
-        return binary_output'''
-
 
     def __str__(self):
         string = f"\nTRAINED MODEL:\n {str(self.bestModel)}"
